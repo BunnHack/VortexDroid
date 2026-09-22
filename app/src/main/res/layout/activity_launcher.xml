@@ -11,8 +11,8 @@
         android:id="@+id/btn_website"
         android:layout_width="240dp"
         android:layout_height="60dp"
-        android:text="Polytoria"
-        app:icon="@mipmap/ic_polytoria_foreground"
+        android:text="Vortex"
+        app:icon="@drawable/ic_launcher_foreground"
         app:iconGravity="textStart"
         app:iconSize="25dp" />
 

@@ -697,15 +697,7 @@ class SettingsActivity : AppCompatActivity() {
         content.addView(perfCard, cardParams())
 
         val (storageCard, storage) = section("Clients")
-        val clientOrder = listOf(ClientDownloader.Channel.BETA, ClientDownloader.Channel.STABLE)
-        for ((idx, channel) in clientOrder.withIndex()) {
-            if (idx > 0) {
-                storage.addView(MaterialDivider(this), layoutParams().apply {
-                    topMargin = dp(6); bottomMargin = dp(6)
-                })
-            }
-            storage.addView(buildClientRow(channel))
-        }
+        storage.addView(buildVortexClientRow())
         content.addView(storageCard, cardParams())
 
         return ScrollView(this).apply {
@@ -714,14 +706,14 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildClientRow(channel: ClientDownloader.Channel): View {
+    private fun buildVortexClientRow(): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
         val textCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(this).apply {
-            text = "Polytoria ${channel.label}"
+            text = "Vortex client"
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge)
         }
         val status = TextView(this).apply {
@@ -734,37 +726,56 @@ class SettingsActivity : AppCompatActivity() {
             gravity = android.view.Gravity.CENTER_VERTICAL
         })
 
-        val settingsBtn = iconButton(R.drawable.ic_settings, MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary, 0))
-        settingsBtn.contentDescription = "${channel.label} client settings"
-        settingsBtn.setOnClickListener {
-            if (channel == ClientDownloader.Channel.BETA) Polytoria2GraphicsDialog(this).show()
-            else PolytoriaGraphicsDialog(this).show()
-        }
-        row.addView(settingsBtn)
+        val reinstallBtn = iconButton(R.drawable.ic_refresh, MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary, 0))
+        reinstallBtn.contentDescription = "Reinstall Vortex client"
+        row.addView(reinstallBtn)
 
-        val deleteBtn = iconButton(R.drawable.ic_delete, MaterialColors.getColor(this, androidx.appcompat.R.attr.colorError, 0))
-        deleteBtn.contentDescription = "Delete ${channel.label} client"
+        val deleteBtn = iconButton(R.drawable.ic_delete, MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnErrorContainer, 0))
+        deleteBtn.contentDescription = "Delete Vortex client"
         row.addView(deleteBtn)
 
         fun refresh() {
-            val v = ClientDownloader.installedVersion(this, channel)
-            status.text = if (v != null) "Installed, $v" else "Not installed"
-            deleteBtn.isEnabled = v != null
+            val installed = VortexClient.isInstalled(this)
+            status.text = if (installed) "Installed" else "Not installed"
+            deleteBtn.isEnabled = installed
         }
         refresh()
 
+        reinstallBtn.setOnClickListener {
+            reinstallBtn.isEnabled = false
+            status.text = "Reinstalling\u2026"
+            Thread {
+                try {
+                    VortexClient.delete(this)
+                    VortexClient.install(this) { _, _ -> }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        Toast.makeText(this, "Vortex client reinstalled", Toast.LENGTH_SHORT).show()
+                        refresh()
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        Toast.makeText(this, "Reinstall failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        refresh()
+                    }
+                }
+                reinstallBtn.isEnabled = true
+            }.start()
+        }
+
         deleteBtn.setOnClickListener {
             com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("Delete ${channel.label} client?")
-                .setMessage("Deletes the ${channel.label} client. It will download the next time you join a ${channel.label} game.")
+                .setTitle("Delete Vortex client?")
+                .setMessage("Deletes the Vortex client. It will reinstall the next time you join a game.")
                 .setPositiveButton("Delete") { _, _ ->
                     deleteBtn.isEnabled = false
-                    status.text = "Deleting…"
+                    status.text = "Deleting\u2026"
                     Thread {
-                        ClientDownloader.delete(this, channel)
+                        VortexClient.delete(this)
                         runOnUiThread {
                             if (isFinishing || isDestroyed) return@runOnUiThread
-                            Toast.makeText(this, "${channel.label} client deleted", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Vortex client deleted", Toast.LENGTH_SHORT).show()
                             refresh()
                         }
                     }.start()
@@ -935,16 +946,6 @@ class SettingsActivity : AppCompatActivity() {
             setPadding(tabSidePadding(), dp(16), tabSidePadding(), dp(24))
         }
 
-        val (updCard, upd) = section("Updates")
-        lateinit var updateRow: ActionRow
-        updateRow = actionRow(
-            "Check for updates",
-            "Current version: ${currentVersionName()}",
-            R.drawable.ic_refresh
-        ) { checkForUpdates(updateRow) }
-        upd.addView(updateRow.view)
-        content.addView(updCard, cardParams(first = true))
-
         val (diagCard, diag) = section("Debug")
         val (safeRow, _) = switchRow(
             "Safe mode",
@@ -960,37 +961,11 @@ class SettingsActivity : AppCompatActivity() {
             R.drawable.ic_send
         ) { sendLogs(logsRow) }
         diag.addView(logsRow.view, layoutParams().apply { topMargin = dp(8) })
-        content.addView(diagCard, cardParams())
+        content.addView(diagCard, cardParams(first = true))
 
         return ScrollView(this).apply {
             isFillViewport = true
             addView(content)
-        }
-    }
-
-    private fun checkForUpdates(row: ActionRow) {
-        row.icon.isClickable = false
-        val spin = android.animation.ObjectAnimator.ofFloat(row.icon, android.view.View.ROTATION, 0f, 360f).apply {
-            duration = 750
-            repeatCount = android.animation.ValueAnimator.INFINITE
-            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
-            start()
-        }
-        val startedAt = android.os.SystemClock.uptimeMillis()
-        val current = currentVersionName()
-        UpdateCheck.checkAsync(current) { result ->
-            val remaining = 1500 - (android.os.SystemClock.uptimeMillis() - startedAt)
-            row.icon.postDelayed({
-                spin.cancel()
-                row.icon.rotation = 0f
-                row.icon.isClickable = true
-                if (isFinishing || isDestroyed) return@postDelayed
-                when {
-                    result == null -> Toast.makeText(this, "Update check failed", Toast.LENGTH_SHORT).show()
-                    result.outdated -> showUpdateDialog(current, result.latestTag, result.htmlUrl)
-                    else -> Toast.makeText(this, "You're up to date! ($current)", Toast.LENGTH_SHORT).show()
-                }
-            }, remaining.coerceAtLeast(0))
         }
     }
 
@@ -1201,21 +1176,6 @@ class SettingsActivity : AppCompatActivity() {
                     .setNegativeButton("Cancel") { _, _ -> showStatsOverlayDialog() }
                     .show()
             }
-            .show()
-    }
-
-    private fun showUpdateDialog(current: String, latestTag: String, url: String) {
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-            .setTitle("Update available")
-            .setMessage("A newer version ($latestTag) is available.\nCurrently on $current.")
-            .setPositiveButton("Update") { _, _ ->
-                try {
-                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                } catch (e: Exception) {
-                    Log.e("PolyDroid2", "no browser to open update URL", e)
-                }
-            }
-            .setNegativeButton("Later", null)
             .show()
     }
 

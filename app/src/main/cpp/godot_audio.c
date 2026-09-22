@@ -30,6 +30,10 @@ struct snd_pcm {
 };
 
 static int audio_enabled(void) {
+    /* POLYDROID_AUDIO is the generic gate (Vortex client);
+       POLYDROID_POLYTORIA2 is kept for compatibility. */
+    const char *a = getenv("POLYDROID_AUDIO");
+    if (a && a[0] == '1') return 1;
     const char *f = getenv("POLYDROID_POLYTORIA2");
     return f && f[0] == '1';
 }

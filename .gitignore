@@ -15,3 +15,6 @@ local.properties
 
 # assets over 50 MB
 app/src/main/assets/rootfs.tar.xz
+
+# Vortex client AppImage (fetched via scripts/fetch-assets.sh)
+app/src/main/assets/vortex/Vortex-linux-x86_64.AppImage

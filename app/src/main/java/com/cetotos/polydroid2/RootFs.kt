@@ -34,8 +34,6 @@ object RootFs {
         "glibc-x86_64/libpulse.so.0",
         "glibc-x86_64/libpulse-simple.so.0",
         "glibc-x86_64/libdbus-1.so.3",
-        "glibc-x86_64/libfmod_sched.so",
-        "glibc-x86_64/libconnect_redirect.so",
         "glibc-x86_64/libtimer_shim.so",
         "libudev_stub.so",
         "libssl.so.1.0.0",
@@ -44,11 +42,9 @@ object RootFs {
         "libcrypto.so.1.1",
         "libasound.so.2.0.0",
         "x86_64-libs/libdns_resolver.so",
-        "x86_64-libs/libunity_crash_fix.so",
         "x86_64-libs/libX11_stub.so",
         "x86_64-libs/libpthread_recursive_fix.so",
         "x86_64-libs/libctype_fix.so",
-        "x86_64-libs/libgodot_ctype_patch.so",
         "x86_64-libs/libeaccess_shim.so",
         "x86_64-libs/libXrandr.so.2",
         "x86_64-libs/libXi.so.6",
@@ -65,26 +61,6 @@ object RootFs {
     )
 
     fun rootDir(ctx: Context): File = File(ctx.filesDir, "rootfs")
-
-    @Volatile private var is2xCached: Boolean? = null
-    fun isPolytoria2(ctx: Context): Boolean {
-        is2xCached?.let { return it }
-        val polyDir = File(rootDir(ctx), "polytoria")
-        val pck = polyDir.listFiles { f -> f.isFile && f.name.endsWith(".pck") }?.firstOrNull()
-        val v = pck != null && try {
-            java.io.RandomAccessFile(pck, "r").use { raf ->
-                val m = ByteArray(4)
-                raf.readFully(m)
-                m[0] == 'G'.code.toByte() && m[1] == 'D'.code.toByte() &&
-                    m[2] == 'P'.code.toByte() && m[3] == 'C'.code.toByte()
-            }
-        } catch (e: Exception) { false }
-        is2xCached = v
-        return v
-    }
-
-    // call after the active client symlink changes so the next isPolytoria2 re-probes.
-    fun invalidateClientCache() { is2xCached = null }
 
     fun isInstalled(ctx: Context): Boolean {
         val versionFile = File(rootDir(ctx), ".pd_version")
@@ -231,61 +207,11 @@ object RootFs {
                 }
             }
         }
-        val polyBinary = File(root, "polytoria/Polytoria Client.x86_64")
-        if (polyBinary.exists()) polyBinary.setExecutable(true, false)
         root.resolve("usr/bin").listFiles()?.forEach { it.setExecutable(true, false) }
         root.resolve("usr/sbin").listFiles()?.forEach { it.setExecutable(true, false) }
         File(root, ".pd_version").writeText(VERSION.toString())
         Log.i(TAG, "Rootfs extraction complete")
     }
-
-    fun deleteSfx(polyDir: File) {
-        val res = File(polyDir, "Polytoria Client_Data/resources.resource")
-        if (!res.exists()) return
-        val marker = File(polyDir, ".pd_sfx_silenced")
-        val sizeStr = res.length().toString()
-        if (marker.exists() && marker.readText().trim() == sizeStr) return
-        try {
-            val bytes = res.readBytes()
-            var banks = 0
-            var bytesZeroed = 0L
-            var pos = 0
-            while (pos + 24 <= bytes.size) {
-                if (bytes[pos] != 'F'.code.toByte() || bytes[pos + 1] != 'S'.code.toByte() ||
-                    bytes[pos + 2] != 'B'.code.toByte() || bytes[pos + 3] != '5'.code.toByte()) {
-                    pos++
-                    continue
-                }
-                val version = readLE32(bytes, pos + 4)
-                val sampleHdrSize = readLE32(bytes, pos + 12)
-                val nameTblSize = readLE32(bytes, pos + 16)
-                val dataSize = readLE32(bytes, pos + 20)
-                val fixedHdr = if (version == 1) 60 else 56
-                val dataStart = pos + fixedHdr + sampleHdrSize + nameTblSize
-                val dataEnd = dataStart + dataSize
-                if (dataEnd > bytes.size || dataSize <= 0) { pos++; continue }
-                for (i in dataStart until dataEnd) bytes[i] = 0
-                banks++
-                bytesZeroed += dataSize.toLong()
-                pos = dataEnd
-            }
-            if (banks > 0) {
-                res.writeBytes(bytes)
-                marker.writeText(res.length().toString())
-                Log.i(TAG, "silenced $banks FSB5 banks ($bytesZeroed bytes)")
-            } else {
-                Log.i(TAG, "no FSB5 banks found")
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "deleteSfx failed: ${e.message}")
-        }
-    }
-
-    private fun readLE32(b: ByteArray, o: Int): Int =
-        (b[o].toInt() and 0xff) or
-        ((b[o + 1].toInt() and 0xff) shl 8) or
-        ((b[o + 2].toInt() and 0xff) shl 16) or
-        ((b[o + 3].toInt() and 0xff) shl 24)
 
     private fun copyAssetCounted(ctx: Context, asset: String, dest: File, progress: Progress) {
         ctx.assets.open(asset).use { raw ->
@@ -366,8 +292,6 @@ object RootFs {
             "libxkbcommon.so.0",
             "libpulse.so.0", "libpulse-simple.so.0",
             "libdbus-1.so.3",
-            "libfmod_sched.so",
-            "libconnect_redirect.so",
             "libtimer_shim.so"
         )
         for (lib in glibcLibs) {
@@ -417,23 +341,13 @@ object RootFs {
         }
 
         try {
-            val dest = File("$rootPath/polytoria", "libunity_crash_fix.so")
-            copyAssetCounted(ctx, "x86_64-libs/libunity_crash_fix.so", dest, progress)
-            dest.setExecutable(true, false)
-            dest.setReadable(true, false)
-        } catch (e: Exception) {
-            Log.w(TAG, "Unity crash fix not found: ${e.message}")
-        }
-
-
-        try {
             copyAssetCounted(ctx, "x86_64-libs/libX11_stub.so", File(x86LibDir, "libX11.so.6"), progress)
             File(x86LibDir, "libX11.so.6").setExecutable(true, false)
         } catch (e: Exception) {
             Log.w(TAG, "libX11_stub.so not found in assets: ${e.message}")
         }
 
-        for (so in listOf("libpthread_recursive_fix.so", "libctype_fix.so", "libgodot_ctype_patch.so", "libeaccess_shim.so", "libXrandr.so.2", "libXi.so.6", "libXinerama.so.1", "libXrender.so.1", "libasound.so.2")) {
+        for (so in listOf("libpthread_recursive_fix.so", "libctype_fix.so", "libeaccess_shim.so", "libXrandr.so.2", "libXi.so.6", "libXinerama.so.1", "libXrender.so.1", "libasound.so.2")) {
             try {
                 val dest = File(x86LibDir, so)
                 copyAssetCounted(ctx, "x86_64-libs/$so", dest, progress)

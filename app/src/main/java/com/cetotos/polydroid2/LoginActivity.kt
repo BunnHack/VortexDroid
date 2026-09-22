@@ -10,6 +10,13 @@ import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlin.concurrent.thread
 
+/**
+ * Receives vortex:// deep links from the playvortex.io website.
+ *
+ * The Vortex client parses the full URL itself (scheme + host/path + query
+ * carry the auth/launch tokens), so all we do is make sure the client is
+ * installed and hand the URL over as the first launch argument.
+ */
 class LoginActivity : AppCompatActivity() {
 
     companion object {
@@ -18,51 +25,25 @@ class LoginActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (!handlePolytoriaIntent(intent)) {
+        if (!handleVortexIntent(intent)) {
             finish()
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handlePolytoriaIntent(intent)
+        handleVortexIntent(intent)
     }
 
-    private fun handlePolytoriaIntent(intent: Intent): Boolean {
+    private fun handleVortexIntent(intent: Intent): Boolean {
         val uri = intent.data ?: return false
-        if (uri.scheme != "polytoria") return false
-        handlePolytoriaUri(uri)
+        if (uri.scheme != "vortex") return false
+        Log.i(TAG, "Vortex deep link: $uri")
+        prepareClientThenLaunch(uri.toString())
         return true
     }
 
-    private fun handlePolytoriaUri(uri: Uri) {
-        val segments = mutableListOf<String>()
-        uri.host?.let { segments.add(it) }
-        uri.pathSegments?.let { segments.addAll(it) }
-
-        if (segments.size < 2) {
-            Log.e(TAG, "Invalid URL! $uri")
-            finish()
-            return
-        }
-
-        val type = segments[0]
-        val token = segments[1]
-        val map = if (segments.size > 2) segments[2] else null
-
-        Log.i(TAG, "Type=$type, token=${token.take(8)}..., map=$map")
-
-        val execArgs = if (type == "test") {
-            "-solo ${map ?: ""}"
-        } else {
-            "-network client -token $token -no-focus-pause"
-        }
-
-        val channel = ClientDownloader.Channel.fromDeepLinkType(type)
-        prepareClientThenLaunch(token, channel, execArgs)
-    }
-
-    private fun prepareClientThenLaunch(token: String, channel: ClientDownloader.Channel, execArgs: String) {
+    private fun prepareClientThenLaunch(deepLinkUrl: String) {
         val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = false
             max = 100
@@ -78,7 +59,7 @@ class LoginActivity : AppCompatActivity() {
             addView(bar)
         }
         val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Preparing ${channel.label} client…")
+            .setTitle("Preparing Vortex client…")
             .setView(dialogView)
             .setCancelable(false)
             .create()
@@ -87,17 +68,20 @@ class LoginActivity : AppCompatActivity() {
 
         thread {
             try {
-                ClientDownloader.prepare(this, token, channel) { pct, label ->
-                    runOnUiThread {
-                        dialog.setTitle(label)
-                        bar.progress = pct
+                if (RootFs.needsExtraction(this)) {
+                    runOnUiThread { dialog.setTitle("Extracting files…") }
+                    RootFs.extractAll(this) { pct, _, _, label ->
+                        runOnUiThread { bar.progress = pct; dialog.setTitle(label) }
                     }
+                }
+                VortexClient.install(this) { pct, label ->
+                    runOnUiThread { bar.progress = pct; dialog.setTitle(label) }
                 }
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     dialog.dismiss()
                     startActivity(Intent(this, GameActivity::class.java).apply {
-                        putExtra("exec_args", execArgs)
+                        putExtra("exec_args", deepLinkUrl)
                     })
                     finish()
                 }
@@ -107,7 +91,7 @@ class LoginActivity : AppCompatActivity() {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     dialog.dismiss()
                     MaterialAlertDialogBuilder(this)
-                        .setTitle("Couldn't get the ${channel.label} client")
+                        .setTitle("Couldn't prepare the Vortex client")
                         .setMessage("${e.message}\n\nPress Play again to retry.")
                         .setPositiveButton("OK") { _, _ -> finish() }
                         .setOnDismissListener { finish() }

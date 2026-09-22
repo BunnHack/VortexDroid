@@ -16,6 +16,7 @@ tasks.named("preBuild") {
             "src/main/assets/x86_64-libs/libgodot_ctype_patch.so",
             "src/main/assets/x86_64-libs/libpthread_recursive_fix.so",
             "src/main/assets/x86_64-libs/libeaccess_shim.so",
+            "src/main/assets/vortex/Vortex-linux-x86_64.AppImage",
         )
         for (path in required) {
             if (!file(path).exists()) error("Missing pre-built: $path")
@@ -31,8 +32,8 @@ android {
         applicationId = "com.cetotos.polydroid2"
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.9.3b"
+        versionCode = 100
+        versionName = "0.1.0-vortex"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -46,7 +47,7 @@ android {
         }
     }
 
-    androidResources { noCompress += listOf("tar.gz", "tar.xz", "txz") }
+    androidResources { noCompress += listOf("tar.gz", "tar.xz", "txz", "AppImage") }
     buildFeatures { aidl = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_11; targetCompatibility = JavaVersion.VERSION_11 }
     kotlinOptions { jvmTarget = "11" }

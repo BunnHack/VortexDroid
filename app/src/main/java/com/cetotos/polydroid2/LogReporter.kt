@@ -31,13 +31,11 @@ object LogReporter {
             .build()
     }
 
-    enum class Client(val label: String, val channel: ClientDownloader.Channel, val logName: String) {
-        GODOT("Polytoria 2.0", ClientDownloader.Channel.BETA, "godot.log"),
-        UNITY("Polytoria 1.0", ClientDownloader.Channel.STABLE, "player.log");
+    enum class Client(val label: String, val logName: String) {
+        VORTEX("Vortex", "vortex.log");
     }
 
-    fun defaultClient(ctx: Context): Client =
-        if (RootFs.isPolytoria2(ctx)) Client.GODOT else Client.UNITY
+    fun defaultClient(ctx: Context): Client = Client.VORTEX
 
     fun promptAndSend(
         ctx: Context,
@@ -107,7 +105,7 @@ object LogReporter {
     private fun buildReport(ctx: Context, client: Client, note: String): String {
         val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
         val vCode = if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else @Suppress("DEPRECATION") pi.versionCode.toLong()
-        val clientVer = ClientDownloader.installedVersion(ctx, client.channel) ?: "not installed"
+        val clientVer = if (VortexClient.isInstalled(ctx)) "installed" else "not installed"
         val soc = if (Build.VERSION.SDK_INT >= 31) "${Build.SOC_MANUFACTURER} ${Build.SOC_MODEL}" else "unknown"
         val mem = ActivityManager.MemoryInfo().also {
             (ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).getMemoryInfo(it)
@@ -136,25 +134,19 @@ object LogReporter {
 
     private fun readGameLog(ctx: Context, client: Client): String {
         val root = RootFs.rootDir(ctx)
-        val file = when (client) {
-            Client.UNITY -> File(root, "home/user/.config/unity3d/Polytoria/Polytoria Client/Player.log")
-            Client.GODOT -> File(root, "home/user/.local/share/PolytoriaClient/logs")
-                .listFiles()?.filter { it.isFile }?.maxByOrNull { it.lastModified() }
-        }
+        val logsDir = File(root, "home/user/.vortex/logs")
+        val file = logsDir.listFiles()?.filter { it.isFile }?.maxByOrNull { it.lastModified() }
         if (file == null || !file.exists()) return "${client.logName} not found (was ${client.label} run this session?)"
-
-        val lines = file.readLines()
-        val start = (lines.size - GAME_LOG_TAIL).coerceAtLeast(0)
-        return buildString {
-            for (i in start until lines.size) {
-                val line = lines[i]
-                if (client == Client.UNITY) {
-                    if (line.contains("sigaction handler for sig ")) continue
-                    if (line.contains("Signal ") && line.contains("si_addr=")) continue
-                    if (line.contains("Warning, calling Signal ") && line.contains("SIG_IGN")) continue
-                }
-                appendLine(line)
-            }
+        val crash = File(logsDir, "crash.log")
+        val tail = { f: File ->
+            val lines = f.readLines()
+            val start = (lines.size - GAME_LOG_TAIL).coerceAtLeast(0)
+            lines.subList(start, lines.size).joinToString("\n")
+        }
+        return if (crash.exists() && crash.length() > 0) {
+            tail(file) + "\n\n----- crash.log -----\n" + tail(crash)
+        } else {
+            tail(file)
         }
     }
 

@@ -53,21 +53,22 @@ object Box64Launcher {
         }
     }
 
+    /**
+     * Launches the Vortex client (Bevy/winit, X11 + Vulkan) under Box64.
+     * [gameArgs] is the vortex:// deep link URL from the website (may be blank).
+     */
     fun launch(ctx: Context, tmpDir: String, gameArgs: String = "", screenWidth: Int = 1280, screenHeight: Int = 720, onLog: (String) -> Unit, onExit: ((Int) -> Unit)? = null): Process {
         val root = RootFs.rootDir(ctx)
         val rootPath = root.absolutePath
         val nativeDir = ctx.applicationInfo.nativeLibraryDir
 
-        val polytoria = File(root, "polytoria/Polytoria Client.x86_64")
-        require(polytoria.exists()) { "Polytoria binary not found at ${polytoria.absolutePath}" }
+        val vortex = File(root, "vortex/usr/bin/Vortex")
+        require(vortex.exists()) { "Vortex binary not found at ${vortex.absolutePath}" }
         val box64 = File(nativeDir, "libbox64.so")
         require(box64.exists()) { "Box64 binary not found at ${box64.absolutePath}" }
+
+        VortexClient.activate(ctx)
         File("$rootPath/usr/lib/arm64-native/libvulkan.so.1").delete()
-        File(root, "polytoria/libdecor-0.so.0").delete()
-        File(root, "polytoria/libdecor-cairo.so").delete()
-        File(root, "polytoria/unity.lock").delete()
-        RootFs.deleteSfx(File(root, "polytoria"))
-        try { PolytoriaPrefs.applyTo(ctx, root) } catch (e: Exception) { Log.w(TAG, "polytoria prefs apply failed: ${e.message}") }
         File("$rootPath/tmp").mkdirs()
         File("$rootPath/tmp/.X11-unix").apply { mkdirs(); setReadable(true, false); setExecutable(true, false); setWritable(true, false) }
 
@@ -94,7 +95,7 @@ object Box64Launcher {
             "root:x:0:\nuser:x:1000:\n"
         )
         val hostsBuilder = StringBuilder("127.0.0.1 localhost\n")
-        for (hostname in listOf("api.polytoria.com", "polytoria.com")) {
+        for (hostname in listOf("playvortex.io", "connect.playvortex.io")) {
             try {
                 val addrs = java.net.InetAddress.getAllByName(hostname)
                 val v4 = addrs.firstOrNull { it is java.net.Inet4Address }
@@ -116,9 +117,11 @@ object Box64Launcher {
         )
         Log.i(TAG, "resolv.conf DNS: ${dnsServers.joinToString(", ")}")
         File(etcDir, "ld.so.conf").writeText(
-            "/usr/lib/x86_64-linux-gnu\n/polytoria\n"
+            "/usr/lib/x86_64-linux-gnu\n/vortex/usr/lib\n"
         )
 
+        // the Vortex client bundles its own root store via rustls, but keep the
+        // CA bundle available for anything that uses OpenSSL-style paths
         val sslDir = File("$rootPath/etc/ssl/certs")
         sslDir.mkdirs()
         val caBundle = File(sslDir, "ca-certificates.crt")
@@ -137,26 +140,6 @@ object Box64Launcher {
                 Log.w(TAG, "No certs found at /system/etc/security/cacerts")
             }
         }
-        val isPolytoria2 = RootFs.isPolytoria2(ctx)
-
-        if (isPolytoria2) {
-            // enable Polytoria's own touchscreen support and embed subwindows so they stay in the main viewport
-            try {
-                File("$rootPath/polytoria/override.cfg").writeText(
-                    "_custom_features=\"touchscreen\"\n\n" +
-                    "[debug]\n\nsettings/stdout/verbose_stdout=false\n\n" +
-                    "[display]\n\nwindow/subwindows/embed_subwindows=true\n\n" +
-                    "[input_devices]\n\npointing/emulate_touch_from_mouse=true\n\n" +
-                    "[rendering]\n\nrenderer/rendering_method=\"mobile\"\nrenderer/rendering_method.mobile=\"mobile\"\n"
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "failed to write override.cfg: ${e.message}")
-            }
-        }
-
-        val arm64NativeDir = File("$rootPath/usr/lib/arm64-native")
-        val libDir = File("$rootPath/usr/lib/aarch64-linux-gnu")
-        val x86LibDir = File("$rootPath/usr/lib/x86_64-linux-gnu")
 
         val safeMode = SettingsActivity.isSafeMode(ctx)
         val peakCpuKHz = File("/sys/devices/system/cpu").listFiles { f -> f.name.matches(Regex("cpu\\d+")) }
@@ -175,8 +158,7 @@ object Box64Launcher {
             put("VK_ICD_FILENAMES", "$rootPath/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")
             put("MESA_VK_WSI_PRESENT_MODE", "mailbox")
             put("BOX64_LD_LIBRARY_PATH",
-                "$rootPath/polytoria:" +
-                "$rootPath/polytoria/dotnet:" +
+                "$rootPath/vortex/usr/lib:" +
                 "$rootPath/usr/lib/x86_64-linux-gnu:" +
                 "$rootPath/usr/lib")
             put("BOX64_EMULATED_LIBS",
@@ -185,57 +167,40 @@ object Box64Launcher {
                 "libX11.so.6:libxcb.so.1:libXext.so.6:" +
                 "libXau.so.6:libXdmcp.so.6:" +
                 "libXrandr.so.2:libXi.so.6:libXcursor.so.1:" +
-                "libXinerama.so.1:libXss.so.1:libXxf86vm.so.1:" +
+                "libXinerama.so.1:libXss.so.1:" +
                 "libXfixes.so.3:libXrender.so.1:" +
                 "libasound.so.2:" +
-                "libpulse.so.0:libpulse-simple.so.0:" +
                 "librt.so.1")
 
             val x86Pre = "$rootPath/usr/lib/x86_64-linux-gnu"
             val ldPreload = listOf(
                 "$x86Pre/libeaccess_shim.so",
                 "$x86Pre/libpthread_recursive_fix.so",
-                "$x86Pre/libgodot_ctype_patch.so",
                 "$x86Pre/libctype_fix.so",
                 "$x86Pre/libpath_remap.so",
                 "$x86Pre/libsysconf_fix.so",
-                "$x86Pre/libdns_resolver.so",
-                "$x86Pre/libconnect_redirect.so"
+                "$x86Pre/libdns_resolver.so"
             ).joinToString(":")
             put("BOX64_LD_PRELOAD", ldPreload)
-            put("BOX64_LOG", "1") // level 2 will give WAY too much do not use it the Player.log ends up being GIGABYTES big
+            put("BOX64_LOG", "1")
             put("BOX64_SHOWSEGV", "1")
             put("BOX64_SHOWBT", "1")
-            put("BOX64_DLSYM_ERROR", "0")   // reduces log spam from missing symbols
+            put("BOX64_DLSYM_ERROR", "0")
             put("BOX64_CRASHHANDLER", "1")
             put("BOX64_DYNAREC", "1")
-            if (isPolytoria2) {
-                put("BOX64_DYNAREC_BIGBLOCK", if (safeMode) "0" else if (lowEnd) "1" else "2")
-                put("BOX64_DYNAREC_STRONGMEM", if (safeMode) "2" else "1")
-                put("BOX64_DYNAREC_WEAKBARRIER", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_FASTNAN", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_FASTROUND", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_SAFEFLAGS", if (safeMode) "2" else "1")
-                put("BOX64_DYNAREC_CALLRET", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_SEP", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_FORWARD", if (safeMode || lowEnd) "128" else "1024")
-                put("BOX64_DYNAREC_ALIGNED_ATOMICS", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_PAUSE", "1")
-                put("BOX64_DYNAREC_WAIT", "1")
-                put("BOX64_DYNAREC_DIRTY", if (safeMode) "0" else "1")
-            } else {
-                put("BOX64_DYNAREC_BIGBLOCK", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_STRONGMEM", "1")
-                put("BOX64_DYNAREC_FASTNAN", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_FASTROUND", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_SAFEFLAGS", "1")
-                put("BOX64_DYNAREC_CALLRET", if (safeMode) "0" else "1")
-                put("BOX64_DYNAREC_SEP", if (safeMode) "1" else "2")
-                put("BOX64_DYNAREC_FORWARD", if (safeMode || lowEnd) "128" else "512")
-                put("BOX64_DYNAREC_ALIGNED_ATOMICS", "1")
-                put("BOX64_DYNAREC_WAIT", "0")
-                put("BOX64_DYNAREC_DIRTY", "0")
-            }
+            put("BOX64_DYNAREC_BIGBLOCK", if (safeMode) "0" else if (lowEnd) "1" else "2")
+            put("BOX64_DYNAREC_STRONGMEM", if (safeMode) "2" else "1")
+            put("BOX64_DYNAREC_WEAKBARRIER", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_FASTNAN", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_FASTROUND", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_SAFEFLAGS", if (safeMode) "2" else "1")
+            put("BOX64_DYNAREC_CALLRET", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_SEP", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_FORWARD", if (safeMode || lowEnd) "128" else "1024")
+            put("BOX64_DYNAREC_ALIGNED_ATOMICS", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_PAUSE", "1")
+            put("BOX64_DYNAREC_WAIT", "1")
+            put("BOX64_DYNAREC_DIRTY", if (safeMode) "0" else "1")
             put("BOX64_DYNAREC_BLEEDING_EDGE", "0")
             put("BOX64_DYNAREC_NATIVEFLAGS", "1")
             put("BOX64_DYNACACHE", "0")
@@ -281,41 +246,11 @@ object Box64Launcher {
             put("CURL_CA_BUNDLE", "$rootPath/etc/ssl/certs/ca-certificates.crt")
             put("LC_ALL", "C")
             put("LANG", "C")
-            put("OPENSSL_ia32cap", "0:0:0:0")
-            if (isPolytoria2) put("POLYDROID_POLYTORIA2", "1") // the native side has the flag aswell
-            put("DOTNET_gcServer", "0")
-            val totalRam = run {
-                val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-                val mi = android.app.ActivityManager.MemoryInfo()
-                am.getMemoryInfo(mi)
-                mi.totalMem
-            }
-            val veryLowMem = totalRam < 4_500_000_000L
-            val lowMem = totalRam < 6_500_000_000L
-            put("DOTNET_gcConcurrent", if (lowMem) "1" else "0")
-            if (lowMem) put("DOTNET_GCConserveMemory", if (veryLowMem) "7" else "5")
-            put("DOTNET_GCgen0size", "0x%x".format(when {
-                veryLowMem -> 0x4000000L
-                totalRam >= 6L shl 30 -> 0x10000000L
-                else -> 0x8000000L
-            }))
-            put("DOTNET_GCNoAffinitize", "1")
-            put("DOTNET_GCCpuGroup", "0")
-            put("DOTNET_gcConservative", "1")
-            put("DOTNET_GCConservative", "1")
-            put("DOTNET_gcForceCompact", "0")
-            put("DOTNET_GCForceCompact", "0")
-            put("DOTNET_GCLatencyLevel", "0")
-            put("DOTNET_gcAllowVeryLargeObjects", "1")
-            put("DOTNET_GCRetainVM", "1")
-            val gcHeapLimit = when {
-                veryLowMem -> 768L shl 20
-                lowMem -> 1L shl 30
-                else -> (totalRam * 45 / 100).coerceIn(1L shl 30, 3L shl 30)
-            }
-            put("DOTNET_GCHeapHardLimit", "0x%x".format(gcHeapLimit))
-            put("DOTNET_DebugWriteToStdErr", "1")
-            put("DOTNET_EnableDiagnostics", "1")
+            put("POLYDROID_AUDIO", "1") // enables the ALSA->Android bridge shim
+            put("XDG_DATA_HOME", "$rootPath/home/user/.local/share")
+            put("XDG_CONFIG_HOME", "$rootPath/home/user/.config")
+            put("XDG_CACHE_HOME", "$rootPath/home/user/.cache")
+            put("XDG_RUNTIME_DIR", "$rootPath/tmp")
             put("SDL_VIDEODRIVER", "x11")
             put("DISPLAY", ":0")
             put("XMODIFIERS", "@im=none")
@@ -325,7 +260,7 @@ object Box64Launcher {
             put("SDL_VIDEO_X11_XRANDR", "0")
             put("SDL_LOG_PRIORITY", "critical")
         }
-        val gameArgStr = if (gameArgs.isNotBlank()) " $gameArgs" else ""
+        val gameArgStr = if (gameArgs.isNotBlank()) " \"$gameArgs\"" else ""
 
         val bigMask = getBigCoresMask()
         val sysTaskset = listOf("/system/bin/taskset", "/system/xbin/taskset")
@@ -343,18 +278,14 @@ object Box64Launcher {
             "export $k=\"$v\""
         }
 
-        val engineArgs = if (isPolytoria2)
-            "--rendering-driver vulkan --rendering-method mobile --audio-driver ALSA"
-        else
-            "-force-vulkan -fullscreen"
-        val box64Cmd = "\"$nativeDir/libbox64.so\" \"$rootPath/polytoria/Polytoria Client.x86_64\" $engineArgs$gameArgStr"
+        val box64Cmd = "\"$nativeDir/libbox64.so\" \"$rootPath/vortex/usr/bin/Vortex\"$gameArgStr"
         val execLine = if (execPrefix.isNotBlank())
             "${execPrefix}/system/bin/true >/dev/null 2>&1 && exec $execPrefix$box64Cmd\nexec $box64Cmd"
         else
             "exec $box64Cmd"
         launchScript.writeText("""#!/bin/sh
 $envExports
-cd "$rootPath/polytoria"
+cd "$rootPath/home/user"
 export LD_PRELOAD="$nativeDir/libhost_syscall_shim.so"
 $execLine
 """)

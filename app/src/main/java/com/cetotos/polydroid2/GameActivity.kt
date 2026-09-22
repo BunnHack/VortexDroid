@@ -114,12 +114,10 @@ class GameActivity : AppCompatActivity() {
 
         startTimeMs = System.currentTimeMillis()
 
+        // The Vortex client parses the full vortex:// URL itself; it is the
+        // only argument (no engine flags needed for Bevy/winit).
         val execArgs = intent.getStringExtra("exec_args") ?: ""
-        val fullArgs = if (execArgs.isNotEmpty()) {
-            "$execArgs -screen-fullscreen 1 -screen-width $renderWidth -screen-height $renderHeight" // it seems making it fullscreen wil almost 4x your fps. i dont know how it increases it that much but it works.
-        } else {
-            ""
-        }
+        val fullArgs = execArgs
         lorieShim = LorieMainActivity(this)
         val frame = FrameLayout(this)
         frame.setBackgroundColor(0xFF000000.toInt())
@@ -169,31 +167,20 @@ class GameActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // touch controls
-        if (RootFs.isPolytoria2(this)) {
-            val touchLayer = CustomKeysOverlay(
-                this, renderWidth, renderHeight,
-                sendKey = { scan, down -> nativeSendKeyEvent(scan, 0, down) },
-                sendTouch = { type, id, x, y -> nativeSendInputEvent(type, id, x, y) },
-            )
-            frame.addView(touchLayer, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ))
-        } else {
-            val touchOverlay = TouchControlOverlay(
-                context = this,
-                renderWidth = renderWidth,
-                renderHeight = renderHeight,
-                sendInput = { type, button, x, y -> nativeSendInputEvent(type, button, x, y) },
-                sendKey = { scanCode, keyCode, down -> nativeSendKeyEvent(scanCode, keyCode, down) },
-                cameraSensitivity = SettingsActivity.getCameraSensitivity(this),
-            )
-            frame.addView(touchOverlay, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ))
-        }
+        // touch controls: the Vortex client uses a desktop-style UI, so use
+        // the mouse/keyboard emulation overlay
+        val touchOverlay = TouchControlOverlay(
+            context = this,
+            renderWidth = renderWidth,
+            renderHeight = renderHeight,
+            sendInput = { type, button, x, y -> nativeSendInputEvent(type, button, x, y) },
+            sendKey = { scanCode, keyCode, down -> nativeSendKeyEvent(scanCode, keyCode, down) },
+            cameraSensitivity = SettingsActivity.getCameraSensitivity(this),
+        )
+        frame.addView(touchOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
 
         statsView = StatsOverlayView(this).apply {
             configure(
@@ -284,7 +271,7 @@ class GameActivity : AppCompatActivity() {
             return
         }
 
-        appendLog("Polytoria Client launching...")
+        appendLog("Vortex client launching...")
         if (fullArgs.isNotEmpty()) {
             appendLog("Launch args recieved: $fullArgs")
         }
@@ -445,7 +432,7 @@ class GameActivity : AppCompatActivity() {
         exitDialogShown = true
         MaterialAlertDialogBuilder(this)
             .setTitle("Exit game?")
-            .setMessage("This closes the Polytoria client and returns to the app.")
+            .setMessage("This closes the Vortex client and returns to the app.")
             .setPositiveButton("Exit") { _, _ -> finish() }
             .setNegativeButton("Cancel", null)
             .setOnDismissListener { exitDialogShown = false }
@@ -489,7 +476,7 @@ class GameActivity : AppCompatActivity() {
         ).apply { topMargin = dp(8) })
 
         val dialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Polytoria has crashed!")
+            .setTitle("Vortex has crashed!")
             .setView(content)
             .setCancelable(false)
             .create()
@@ -568,7 +555,7 @@ class GameActivity : AppCompatActivity() {
         }
 
         val msg = TextView(this).apply {
-            text = "Your device is too hot. Polytoria has exited in order to stop damage to device. Please cool down your device before playing."
+            text = "Your device is too hot. Vortex has exited in order to stop damage to device. Please cool down your device before playing."
             setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium)
         }
         content.addView(msg, LinearLayout.LayoutParams(

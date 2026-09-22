@@ -17,11 +17,10 @@ class LauncherActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "PolyDroid2"
-        private const val POLYTORIA_URL = "https://polytoria.com/home"
+        private const val VORTEX_URL = "https://playvortex.io/home"
     }
 
     private var extractionInProgress = false
-    private var updateDialogShowing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,13 +39,15 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         findViewById<android.view.View>(R.id.btn_website).setOnClickListener {
-            polyWebsite()
+            vortexWebsite()
         }
 
         findViewById<android.view.View>(R.id.btn_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
+        // pre-extract the rootfs (and Vortex client when possible) so the
+        // first Play from the website is fast
         if (RootFs.needsExtraction(this)) {
             extractionInProgress = true
             val detailBar = ProgressBar(
@@ -80,70 +81,37 @@ class LauncherActivity : AppCompatActivity() {
                         detailBar.progress = detailPct
                     }
                 }
+                try {
+                    VortexClient.install(this) { pct, label ->
+                        runOnUiThread {
+                            dialog.setTitle(label)
+                            detailBar.progress = pct
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Vortex client pre-install failed (will retry on launch): ${e.message}")
+                }
                 runOnUiThread {
                     dialog.dismiss()
                     extractionInProgress = false
-                    kickoffUpdateCheck()
                 }
             }
         }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (!extractionInProgress) kickoffUpdateCheck()
-    }
-
-    private fun kickoffUpdateCheck() {
-        if (updateDialogShowing) return
-        val current = currentVersionName()
-        UpdateCheck.checkAsync(current) { result ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (result != null && result.outdated) {
-                    showUpdateDialog(current, result.latestTag, result.htmlUrl)
-                }
-            }
-        }
-    }
-
-    private fun showUpdateDialog(current: String, latestTag: String, url: String) {
-        updateDialogShowing = true
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Update available")
-            .setMessage("A newer version ($latestTag) is available.\nCurrently on $current.")
-            .setPositiveButton("Update") { _, _ ->
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                } catch (e: Exception) {
-                    Log.e(TAG, "no browser to open update URL", e)
-                }
-            }
-            .setNegativeButton("Later", null)
-            .setOnDismissListener { updateDialogShowing = false }
-            .show()
-    }
-
-    private fun currentVersionName(): String = try {
-        @Suppress("DEPRECATION")
-        packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
-    } catch (_: Exception) {
-        "0"
     }
 
     private fun Int.dpToPx(): Int =
         (this * resources.displayMetrics.density).toInt()
 
-    private fun polyWebsite() {
+    private fun vortexWebsite() {
         try {
             val customTabsIntent = CustomTabsIntent.Builder()
                 .setShowTitle(false)
                 .setUrlBarHidingEnabled(true)
                 .build()
-            customTabsIntent.launchUrl(this, Uri.parse(POLYTORIA_URL))
+            customTabsIntent.launchUrl(this, Uri.parse(VORTEX_URL))
         } catch (e: Exception) {
             try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(POLYTORIA_URL)))
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(VORTEX_URL)))
             } catch (e2: Exception) {
                 Log.e(TAG, "No browser available!", e2)
             }
