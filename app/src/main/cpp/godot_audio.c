@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -18,6 +19,12 @@ typedef long snd_pcm_sframes_t;
 typedef struct snd_pcm snd_pcm_t;
 typedef struct snd_pcm_hw_params snd_pcm_hw_params_t;
 typedef struct snd_pcm_sw_params snd_pcm_sw_params_t;
+typedef struct snd_pcm_info snd_pcm_info_t;
+typedef struct snd_pcm_status snd_pcm_status_t;
+typedef struct snd_ctl snd_ctl_t;
+typedef struct snd_ctl_card_info snd_ctl_card_info_t;
+typedef unsigned long snd_pcm_chmap_query_t;
+typedef unsigned long snd_pcm_chmap_t;
 
 struct snd_pcm {
     int fd;
@@ -27,7 +34,10 @@ struct snd_pcm {
     uint8_t carry[16];
     int carry_len;
     int carry_off;
+    int nonblock;
 };
+
+struct snd_ctl { int dummy; };
 
 static int audio_enabled(void) {
     /* POLYDROID_AUDIO is the generic gate (Vortex client);
@@ -93,6 +103,116 @@ int snd_pcm_hw_params_set_period_size_near(snd_pcm_t *p, snd_pcm_hw_params_t *h,
 int snd_pcm_hw_params_set_periods_near(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int *val, int *dir) { (void)p; (void)h; (void)val; (void)dir; return 0; }
 void snd_pcm_hw_params_free(snd_pcm_hw_params_t *h) { (void)h; }
 
+/* ---- cpal ALSA-hostile surface: satisfy link-time relocations ---- */
+
+int snd_pcm_hw_params_get_channels(const snd_pcm_hw_params_t *h, unsigned int *ch) { (void)h; if (ch) *ch = 2; return 0; }
+int snd_pcm_hw_params_get_channels_min(const snd_pcm_hw_params_t *h, unsigned int *ch) { (void)h; if (ch) *ch = 1; return 0; }
+int snd_pcm_hw_params_get_channels_max(const snd_pcm_hw_params_t *h, unsigned int *ch) { (void)h; if (ch) *ch = 2; return 0; }
+int snd_pcm_hw_params_get_rate(const snd_pcm_hw_params_t *h, unsigned int *r, int *dir) { (void)h; (void)dir; if (r) *r = 48000; return 0; }
+int snd_pcm_hw_params_get_rate_min(const snd_pcm_hw_params_t *h, unsigned int *r, int *dir) { (void)h; (void)dir; if (r) *r = 8000; return 0; }
+int snd_pcm_hw_params_get_rate_max(const snd_pcm_hw_params_t *h, unsigned int *r, int *dir) { (void)h; (void)dir; if (r) *r = 48000; return 0; }
+int snd_pcm_hw_params_test_rate(const snd_pcm_t *p, const snd_pcm_hw_params_t *h, unsigned int r, int dir) { (void)p; (void)h; (void)r; (void)dir; return 0; }
+int snd_pcm_hw_params_set_rate(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int r, int dir) { (void)h; (void)dir; if (p) p->rate = r; return 0; }
+int snd_pcm_hw_params_set_rate_resample(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int r) { (void)p; (void)h; (void)r; return 0; }
+int snd_pcm_hw_params_test_format(const snd_pcm_t *p, const snd_pcm_hw_params_t *h, int f) { (void)p; (void)h; (void)f; return 0; }
+int snd_pcm_hw_params_get_format(const snd_pcm_hw_params_t *h, int *f) { (void)h; if (f) *f = 2 /* SND_PCM_FORMAT_S16_LE */; return 0; }
+int snd_pcm_hw_params_test_channels(const snd_pcm_t *p, const snd_pcm_hw_params_t *h, unsigned int c) { (void)p; (void)h; (void)c; return 0; }
+int snd_pcm_hw_params_get_period_size(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v, int *dir) { (void)h; (void)dir; if (v) *v = 512; return 0; }
+int snd_pcm_hw_params_get_period_size_min(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v, int *dir) { (void)h; (void)dir; if (v) *v = 64; return 0; }
+int snd_pcm_hw_params_get_period_size_max(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v, int *dir) { (void)h; (void)dir; if (v) *v = 16384; return 0; }
+int snd_pcm_hw_params_set_period_size(snd_pcm_t *p, snd_pcm_hw_params_t *h, snd_pcm_uframes_t v, int dir) { (void)p; (void)h; (void)v; (void)dir; return 0; }
+int snd_pcm_hw_params_get_buffer_size(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v) { (void)h; if (v) *v = 2048; return 0; }
+int snd_pcm_hw_params_get_buffer_size_min(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v) { (void)h; if (v) *v = 128; return 0; }
+int snd_pcm_hw_params_get_buffer_size_max(const snd_pcm_hw_params_t *h, snd_pcm_uframes_t *v) { (void)h; if (v) *v = 65536; return 0; }
+int snd_pcm_hw_params_set_buffer_size(snd_pcm_t *p, snd_pcm_hw_params_t *h, snd_pcm_uframes_t v) { (void)p; (void)h; (void)v; return 0; }
+int snd_pcm_hw_params_get_periods(const snd_pcm_hw_params_t *h, unsigned int *v, int *dir) { (void)h; (void)dir; if (v) *v = 4; return 0; }
+int snd_pcm_hw_params_get_periods_min(const snd_pcm_hw_params_t *h, unsigned int *v, int *dir) { (void)h; (void)dir; if (v) *v = 1; return 0; }
+int snd_pcm_hw_params_get_periods_max(const snd_pcm_hw_params_t *h, unsigned int *v, int *dir) { (void)h; (void)dir; if (v) *v = 64; return 0; }
+int snd_pcm_hw_params_set_periods(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int v, int dir) { (void)p; (void)h; (void)v; (void)dir; return 0; }
+int snd_pcm_hw_params_can_pause(const snd_pcm_hw_params_t *h) { (void)h; return 0; }
+int snd_pcm_hw_params_can_resume(const snd_pcm_hw_params_t *h) { (void)h; return 0; }
+int snd_pcm_hw_params_get_access(const snd_pcm_hw_params_t *h, int *a) { (void)h; if (a) *a = 3 /* RW_INTERLEAVED */; return 0; }
+int snd_pcm_hw_params_get_sbits(const snd_pcm_hw_params_t *h) { (void)h; return 16; }
+int snd_pcm_hw_params_current(snd_pcm_t *p, snd_pcm_hw_params_t *h) { (void)p; (void)h; return 0; }
+
+size_t snd_pcm_status_sizeof(void) { return 256; }
+int snd_pcm_status_malloc(snd_pcm_status_t **s) { if (!s) return -1; *s = calloc(1, 256); return *s ? 0 : -1; }
+void snd_pcm_status_free(snd_pcm_status_t *s) { free(s); }
+int snd_pcm_status(snd_pcm_t *p, snd_pcm_status_t *s) { (void)p; (void)s; return 0; }
+void snd_pcm_status_get_htstamp(const snd_pcm_status_t *s, struct timespec *t) { (void)s; if (t) { t->tv_sec = 0; t->tv_nsec = 0; } }
+void snd_pcm_status_get_trigger_htstamp(const snd_pcm_status_t *s, struct timespec *t) { (void)s; if (t) { t->tv_sec = 0; t->tv_nsec = 0; } }
+long snd_pcm_status_get_delay(const snd_pcm_status_t *s) { (void)s; return 0; }
+snd_pcm_uframes_t snd_pcm_status_get_avail(const snd_pcm_status_t *s) { (void)s; return 4096; }
+
+size_t snd_pcm_info_sizeof(void) { return 256; }
+int snd_pcm_info_malloc(snd_pcm_info_t **i) { if (!i) return -1; *i = calloc(1, 256); return *i ? 0 : -1; }
+void snd_pcm_info_free(snd_pcm_info_t *i) { free(i); }
+void snd_pcm_info_set_device(snd_pcm_info_t *i, unsigned int d) { (void)i; (void)d; }
+void snd_pcm_info_set_subdevice(snd_pcm_info_t *i, unsigned int d) { (void)i; (void)d; }
+void snd_pcm_info_set_stream(snd_pcm_info_t *i, int s) { (void)i; (void)s; }
+const char *snd_pcm_info_get_name(const snd_pcm_info_t *i) { (void)i; return "polydroid"; }
+unsigned int snd_pcm_info_get_devices_min(void) { return 0; }
+int snd_pcm_info_is_substream(snd_pcm_info_t *i) { (void)i; return 1; }
+
+snd_pcm_sframes_t snd_pcm_avail(snd_pcm_t *p) { (void)p; return 4096; }
+snd_pcm_sframes_t snd_pcm_avail_update(snd_pcm_t *p) { (void)p; return 4096; }
+int snd_pcm_pause(snd_pcm_t *p, int e) { (void)p; (void)e; return 0; }
+int snd_pcm_resume(snd_pcm_t *p) { (void)p; return 0; }
+snd_pcm_sframes_t snd_pcm_forward(snd_pcm_t *p, snd_pcm_uframes_t f) { (void)p; return (snd_pcm_sframes_t)f; }
+int snd_pcm_delay(snd_pcm_t *p, snd_pcm_sframes_t *d) { (void)p; if (d) *d = 0; return 0; }
+snd_pcm_sframes_t snd_pcm_bytes_to_frames(snd_pcm_t *p, ssize_t b) { (void)p; return (snd_pcm_sframes_t)(b / 4); }
+ssize_t snd_pcm_frames_to_bytes(snd_pcm_t *p, snd_pcm_sframes_t f) { (void)p; return (ssize_t)f * 4; }
+int snd_pcm_link(snd_pcm_t *a, snd_pcm_t *b) { (void)a; (void)b; return 0; }
+int snd_pcm_unlink(snd_pcm_t *p) { (void)p; return 0; }
+int snd_pcm_poll_descriptors_count(snd_pcm_t *p) { (void)p; return 1; }
+int snd_pcm_poll_descriptors(snd_pcm_t *p, struct pollfd *pfds, unsigned int space) {
+    (void)p;
+    if (!pfds || space < 1) return -1;
+    pfds[0].fd = 1;
+    pfds[0].events = POLLOUT;
+    return 1;
+}
+int snd_pcm_poll_descriptors_revents(snd_pcm_t *p, struct pollfd *pfds, unsigned int nfds, unsigned short *revents) {
+    (void)p;
+    if (!pfds || !revents || nfds < 1) return -1;
+    *revents = pfds[0].revents & POLLOUT;
+    return 0;
+}
+int snd_pcm_mmap_begin(snd_pcm_t *p, void **a, snd_pcm_uframes_t *o, snd_pcm_uframes_t *f) { (void)p; if (a) *a = NULL; (void)o; if (f) *f = 0; return 0; }
+snd_pcm_sframes_t snd_pcm_mmap_commit(snd_pcm_t *p, snd_pcm_uframes_t o, snd_pcm_uframes_t f) { (void)p; (void)o; return (snd_pcm_sframes_t)f; }
+int snd_pcm_mmap(snd_pcm_t *p, int i, void **a) { (void)p; (void)i; if (a) *a = NULL; return 0; }
+int snd_pcm_munmap(snd_pcm_t *p, int i) { (void)p; (void)i; return 0; }
+int snd_pcm_set_params(snd_pcm_t *p, int f, int a, unsigned int ch, unsigned int r, int s, snd_pcm_uframes_t l) {
+    (void)f; (void)a; (void)s; (void)l;
+    if (p) { p->channels = (int)ch; p->rate = r; }
+    return 0;
+}
+int snd_pcm_get_params(snd_pcm_t *p, snd_pcm_uframes_t *buf, snd_pcm_uframes_t *per) {
+    if (buf) *buf = 2048; if (per) *per = 512; (void)p; return 0;
+}
+
+/* ---- control devices (cpal enumerates them, hand it one virtual card) ---- */
+
+int snd_ctl_open(snd_ctl_t **c, const char *name, int mode) { (void)name; (void)mode; if (!c) return -1; *c = calloc(1, sizeof(snd_ctl_t)); return *c ? 0 : -1; }
+int snd_ctl_close(snd_ctl_t *c) { free(c); return 0; }
+size_t snd_ctl_card_info_sizeof(void) { return 128; }
+int snd_ctl_card_info_malloc(snd_ctl_card_info_t **i) { if (!i) return -1; *i = calloc(1, 128); return *i ? 0 : -1; }
+void snd_ctl_card_info_free(snd_ctl_card_info_t *i) { free(i); }
+void snd_ctl_card_info_clear(snd_ctl_card_info_t *i) { if (i) memset(i, 0, 128); }
+int snd_ctl_card_info(snd_ctl_t *c, snd_ctl_card_info_t *i) { (void)c; (void)i; return 0; }
+const char *snd_ctl_card_info_get_name(const snd_ctl_card_info_t *i) { (void)i; return "PolyDroid Audio"; }
+const char *snd_ctl_card_info_get_id(const snd_ctl_card_info_t *i) { (void)i; return "polydroid"; }
+const char *snd_ctl_card_info_get_mixername(const snd_ctl_card_info_t *i) { (void)i; return "PolyDroid Audio"; }
+int snd_ctl_pcm_next_device(snd_ctl_t *c, int *d) { (void)c; if (d) *d = -1; return 0; }
+int snd_ctl_pcm_info(snd_ctl_t *c, snd_pcm_info_t *i) { (void)c; (void)i; return -ENOENT; }
+int snd_card_next(int *card) { if (card) *card = -1; return 0; }
+int snd_config_update_free_global(void) { return 0; }
+void snd_config_update_free(void *p) { (void)p; }
+
+/* ---- channel maps (minimal) ---- */
+snd_pcm_chmap_query_t **snd_pcm_query_chmaps(snd_pcm_t *p) { (void)p; return NULL; }
+void snd_pcm_free_chmaps(snd_pcm_chmap_query_t **m) { (void)m; }
+
 int snd_pcm_hw_params(snd_pcm_t *p, snd_pcm_hw_params_t *h) {
     (void)h;
     if (!p) return -1;
@@ -104,7 +224,7 @@ int snd_pcm_hw_params(snd_pcm_t *p, snd_pcm_hw_params_t *h) {
         memcpy(hdr + 0, &magic, 4);
         memcpy(hdr + 4, &rate, 4);
         hdr[8] = (uint8_t)(p->channels > 0 ? p->channels : 2);
-        hdr[9] = PA_SAMPLE_S16LE; // Godot's alsa driver always uses S16_LE
+        hdr[9] = PA_SAMPLE_S16LE; // S16_LE host endian
         hdr[10] = 0; hdr[11] = 0;
         if (write_all(p->fd, hdr, sizeof(hdr)) == 0) {
             p->started = 1;
@@ -113,7 +233,7 @@ int snd_pcm_hw_params(snd_pcm_t *p, snd_pcm_hw_params_t *h) {
             int fl = fcntl(p->fd, F_GETFL, 0);
             if (fl >= 0) fcntl(p->fd, F_SETFL, fl | O_NONBLOCK);
         } else {
-            fprintf(stderr, "Godot: header send failed, audio off\n");
+            fprintf(stderr, "polydroid: audio header send failed, audio off\n");
             close(p->fd); p->fd = -1;
         }
     }
@@ -124,6 +244,10 @@ int snd_pcm_sw_params_current(snd_pcm_t *p, snd_pcm_sw_params_t *s) { (void)p; (
 int snd_pcm_sw_params_set_avail_min(snd_pcm_t *p, snd_pcm_sw_params_t *s, snd_pcm_uframes_t v) { (void)p; (void)s; (void)v; return 0; }
 int snd_pcm_sw_params_set_start_threshold(snd_pcm_t *p, snd_pcm_sw_params_t *s, snd_pcm_uframes_t v) { (void)p; (void)s; (void)v; return 0; }
 int snd_pcm_sw_params(snd_pcm_t *p, snd_pcm_sw_params_t *s) { (void)p; (void)s; return 0; }
+int snd_pcm_sw_params_malloc(snd_pcm_sw_params_t **s) { if (!s) return -1; *s = calloc(1, 512); return *s ? 0 : -1; }
+void snd_pcm_sw_params_free(snd_pcm_sw_params_t *s) { free(s); }
+void snd_pcm_sw_params_get_avail_min(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 512; }
+void snd_pcm_sw_params_get_start_threshold(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 1; }
 
 snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *p, const void *buf, snd_pcm_uframes_t frames) {
     if (!p) return -1;
@@ -161,12 +285,15 @@ snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *p, const void *buf, snd_pcm_uframes_
     return (snd_pcm_sframes_t)full;
 }
 
+snd_pcm_sframes_t snd_pcm_readi(snd_pcm_t *p, void *buf, snd_pcm_uframes_t frames) { (void)p; (void)buf; return -1; }
+
 int snd_pcm_recover(snd_pcm_t *p, int err, int silent) { (void)p; (void)err; (void)silent; return 0; }
 int snd_pcm_prepare(snd_pcm_t *p) { (void)p; return 0; }
 int snd_pcm_drain(snd_pcm_t *p) { (void)p; return 0; }
 int snd_pcm_drop(snd_pcm_t *p) { (void)p; return 0; }
 int snd_pcm_start(snd_pcm_t *p) { (void)p; return 0; }
-int snd_pcm_nonblock(snd_pcm_t *p, int n) { (void)p; (void)n; return 0; }
+int snd_pcm_nonblock(snd_pcm_t *p, int n) { if (p) p->nonblock = n; return 0; }
+int snd_pcm_wait(snd_pcm_t *p, int ms) { (void)p; (void)ms; return 1; }
 
 int snd_device_name_hint(int card, const char *iface, void ***hints) {
     (void)card; (void)iface;

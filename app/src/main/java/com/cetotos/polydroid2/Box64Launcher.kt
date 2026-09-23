@@ -69,6 +69,21 @@ object Box64Launcher {
 
         VortexClient.activate(ctx)
         File("$rootPath/usr/lib/arm64-native/libvulkan.so.1").delete()
+        // Overlay Android-compatible shims on top of the AppImage's own x86
+        // libs: the real libudev needs glibc-only symbols (name_to_handles_at,
+        // sigisemptyset...) that bionic doesn't provide, and our ALSA shim
+        // bridges audio to the Android AudioBridge instead.
+        run {
+            val imgLibs = File(rootPath, "vortex/usr/lib")
+            val x86LibDir = File("$rootPath/usr/lib/x86_64-linux-gnu")
+            try {
+                File(imgLibs, "libudev.so.1").copyTo(File(imgLibs, "libudev.real.so.1"), overwrite = true)
+                File(x86LibDir, "libudev.so.1").copyTo(File(imgLibs, "libudev.so.1"), overwrite = true)
+                File(x86LibDir, "libasound.so.2").copyTo(File(imgLibs, "libasound.so.2"), overwrite = true)
+            } catch (e: Exception) {
+                Log.w(TAG, "client lib overlay failed: ${e.message}")
+            }
+        }
         File("$rootPath/tmp").mkdirs()
         File("$rootPath/tmp/.X11-unix").apply { mkdirs(); setReadable(true, false); setExecutable(true, false); setWritable(true, false) }
 
@@ -176,7 +191,6 @@ object Box64Launcher {
             val ldPreload = listOf(
                 "$x86Pre/libeaccess_shim.so",
                 "$x86Pre/libpthread_recursive_fix.so",
-                "$x86Pre/libctype_fix.so",
                 "$x86Pre/libpath_remap.so",
                 "$x86Pre/libsysconf_fix.so",
                 "$x86Pre/libdns_resolver.so"
@@ -194,9 +208,9 @@ object Box64Launcher {
             put("BOX64_DYNAREC_FASTNAN", if (safeMode) "0" else "1")
             put("BOX64_DYNAREC_FASTROUND", if (safeMode) "0" else "1")
             put("BOX64_DYNAREC_SAFEFLAGS", if (safeMode) "2" else "1")
-            put("BOX64_DYNAREC_CALLRET", if (safeMode) "0" else "1")
+            put("BOX64_DYNAREC_CALLRET", "0") // pthread_create crashed with CALLRET on the Rust client
             put("BOX64_DYNAREC_SEP", if (safeMode) "0" else "1")
-            put("BOX64_DYNAREC_FORWARD", if (safeMode || lowEnd) "128" else "1024")
+            put("BOX64_DYNAREC_FORWARD", if (safeMode || lowEnd) "128" else "512")
             put("BOX64_DYNAREC_ALIGNED_ATOMICS", if (safeMode) "0" else "1")
             put("BOX64_DYNAREC_PAUSE", "1")
             put("BOX64_DYNAREC_WAIT", "1")

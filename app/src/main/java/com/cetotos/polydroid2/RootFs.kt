@@ -51,6 +51,7 @@ object RootFs {
         "x86_64-libs/libXinerama.so.1",
         "x86_64-libs/libXrender.so.1",
         "x86_64-libs/libasound.so.2",
+        "x86_64-libs/libX11-xcb.so.1",
         "arm64-x11-libs/libandroid-support.so",
         "arm64-x11-libs/libXau.so",
         "arm64-x11-libs/libXdmcp.so",
@@ -329,6 +330,19 @@ object RootFs {
             dest.setReadable(true, false)
         } catch (e: Exception) {
             Log.w(TAG, "ALSA stub deploy failed: ${e.message}")
+        }
+
+        // x86 stub for libX11-xcb: the ARM64 emulated libX11 needs
+        // libX11-xcb.so, the client needs libX11-xcb.so.1 (see x11_xcb_stub.c)
+        for (lib in listOf("libX11-xcb.so.1", "libX11-xcb.so")) {
+            try {
+                val dest = File(x86LibDir, lib)
+                copyAssetCounted(ctx, "x86_64-libs/$lib", dest, progress)
+                dest.setExecutable(true, false)
+                dest.setReadable(true, false)
+            } catch (e: Exception) {
+                Log.w(TAG, "libX11-xcb stub deploy failed: ${e.message}")
+            }
         }
 
         try {
