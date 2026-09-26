@@ -119,11 +119,20 @@ object VortexClient {
             xdgVortex.mkdirs()
             val dst = java.io.File(xdgVortex, "Vortex.AppImage")
             val src = binary(ctx)
-            if (!dst.exists() || dst.length() != src.length()) {
+            val marker = java.io.File(xdgVortex, ".shim_ok")
+            if (!marker.exists() || dst.length() != src.length()) {
                 src.copyTo(dst, overwrite = true)
+                // stamp the AppImage type-2 magic at offset 8 (ELF OSABI
+                // padding - ignored by loaders) so the client's APPIMAGE
+                // check passes while the file stays a runnable ELF
+                java.io.RandomAccessFile(dst, "rw").use { raf ->
+                    raf.seek(8)
+                    raf.write(byteArrayOf(0x41, 0x49, 0x02))
+                }
                 dst.setExecutable(true, false)
                 dst.setReadable(true, false)
-                Log.i(TAG, "staged client binary as AppImage shim at ${dst.absolutePath}")
+                marker.writeText("ok")
+                Log.i(TAG, "staged magic-stamped client shim at ${dst.absolutePath}")
             }
         }
 
