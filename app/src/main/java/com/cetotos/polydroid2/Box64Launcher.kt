@@ -267,6 +267,19 @@ object Box64Launcher {
             put("LC_ALL", "C")
             put("LANG", "C")
             put("POLYDROID_AUDIO", "1") // enables the ALSA->Android bridge shim
+            // Pretend the client was launched from its AppImage: the Linux
+            // bootstrap only processes the vortex:// deep link when the
+            // AppImage runtime env vars are present (APPIMAGE/APPDIR/ARGV0/OWD).
+            // Without these the client shows "Load a game from the website
+            // first to enable app authentication" even with the URL in argv.
+            run {
+                val appImage = java.io.File(ctx.filesDir, "vortex-client/Vortex.AppImage")
+                val appDir = File(rootPath, "vortex")
+                put("APPIMAGE", appImage.absolutePath)
+                put("APPDIR", appDir.absolutePath)
+                put("ARGV0", appImage.absolutePath)
+                put("OWD", "$rootPath/home/user")
+            }
             put("XDG_DATA_HOME", "$rootPath/home/user/.local/share")
             put("XDG_CONFIG_HOME", "$rootPath/home/user/.config")
             put("XDG_CACHE_HOME", "$rootPath/home/user/.cache")
