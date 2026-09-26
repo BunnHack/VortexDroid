@@ -176,10 +176,14 @@ object Box64Launcher {
                 "$rootPath/vortex/usr/lib:" +
                 "$rootPath/usr/lib/x86_64-linux-gnu:" +
                 "$rootPath/usr/lib")
+            // libX11.so.6 deliberately NOT emulated: the ARM64 Termux libX11
+            // lacks the Xcms* symbols winit's x11-dl resolves, so use the
+            // full x86 libX11 bundled in the AppImage instead (it goes
+            // through the emulated libxcb to reach the X server either way).
             put("BOX64_EMULATED_LIBS",
                 "libudev.so.1:" +
                 "libstdc++.so.6:libgcc_s.so.1:" +
-                "libX11.so.6:libxcb.so.1:libXext.so.6:" +
+                "libxcb.so.1:libXext.so.6:" +
                 "libXau.so.6:libXdmcp.so.6:" +
                 "libXrandr.so.2:libXi.so.6:libXcursor.so.1:" +
                 "libXinerama.so.1:libXss.so.1:" +

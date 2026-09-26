@@ -364,13 +364,6 @@ object RootFs {
             Log.w(TAG, "DNS resolver shim not found: ${e.message}")
         }
 
-        try {
-            copyAssetCounted(ctx, "x86_64-libs/libX11_stub.so", File(x86LibDir, "libX11.so.6"), progress)
-            File(x86LibDir, "libX11.so.6").setExecutable(true, false)
-        } catch (e: Exception) {
-            Log.w(TAG, "libX11_stub.so not found in assets: ${e.message}")
-        }
-
         for (so in listOf("libpthread_recursive_fix.so", "libctype_fix.so", "libeaccess_shim.so", "libXrandr.so.2", "libXi.so.6", "libXinerama.so.1", "libXrender.so.1", "libasound.so.2")) {
             try {
                 val dest = File(x86LibDir, so)
