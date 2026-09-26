@@ -138,8 +138,10 @@ int snd_pcm_hw_params_get_access(const snd_pcm_hw_params_t *h, int *a) { (void)h
 int snd_pcm_hw_params_get_sbits(const snd_pcm_hw_params_t *h) { (void)h; return 16; }
 int snd_pcm_hw_params_current(snd_pcm_t *p, snd_pcm_hw_params_t *h) { (void)p; (void)h; return 0; }
 
-size_t snd_pcm_status_sizeof(void) { return 256; }
-int snd_pcm_status_malloc(snd_pcm_status_t **s) { if (!s) return -1; *s = calloc(1, 256); return *s ? 0 : -1; }
+/* keep in sync with alsa-lib 1.2.x: sizeof(snd_pcm_status_t) == 144.
+ * cpal asserts the runtime value is <= its compile-time STATUS_SIZE. */
+size_t snd_pcm_status_sizeof(void) { return 144; }
+int snd_pcm_status_malloc(snd_pcm_status_t **s) { if (!s) return -1; *s = calloc(1, 144); return *s ? 0 : -1; }
 void snd_pcm_status_free(snd_pcm_status_t *s) { free(s); }
 int snd_pcm_status(snd_pcm_t *p, snd_pcm_status_t *s) { (void)p; (void)s; return 0; }
 void snd_pcm_status_get_htstamp(const snd_pcm_status_t *s, struct timespec *t) { (void)s; if (t) { t->tv_sec = 0; t->tv_nsec = 0; } }
