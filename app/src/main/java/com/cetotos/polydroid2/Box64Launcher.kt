@@ -273,11 +273,15 @@ object Box64Launcher {
             // Without these the client shows "Load a game from the website
             // first to enable app authentication" even with the URL in argv.
             run {
-                val appImage = java.io.File(ctx.filesDir, "vortex-client/Vortex.AppImage")
+                // point at the XDG-staged copy: the bootstrap re-executes
+                // this exact path when it handles the vortex:// deep link
+                val appImage = File(rootPath, "home/user/.local/share/vortex/Vortex.AppImage")
+                val fallback = java.io.File(ctx.filesDir, "vortex-client/Vortex.AppImage")
+                val target = if (appImage.exists()) appImage else fallback
                 val appDir = File(rootPath, "vortex")
-                put("APPIMAGE", appImage.absolutePath)
+                put("APPIMAGE", target.absolutePath)
                 put("APPDIR", appDir.absolutePath)
-                put("ARGV0", appImage.absolutePath)
+                put("ARGV0", target.absolutePath)
                 put("OWD", "$rootPath/home/user")
             }
             put("XDG_DATA_HOME", "$rootPath/home/user/.local/share")

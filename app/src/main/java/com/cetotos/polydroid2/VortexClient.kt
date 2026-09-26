@@ -104,6 +104,27 @@ object VortexClient {
 
         neutralizePthreadIntercept(bin)
 
+        // The client's Linux bootstrap re-launches itself from the XDG
+        // location (~/.local/share/vortex/Vortex.AppImage) when handling a
+        // deep link with APPIMAGE set. Stage the real file there so the
+        // re-exec finds it (it would otherwise hit the AppImage runtime and
+        // fail on /dev/fuse).
+        run {
+            val xdgVortex = java.io.File(
+                extractedDir(ctx).absolutePath.let { _ ->
+                    ctx.filesDir.absolutePath
+                } + "/rootfs/home/user/.local/share/vortex"
+            )
+            xdgVortex.mkdirs()
+            val dst = java.io.File(xdgVortex, "Vortex.AppImage")
+            if (!dst.exists() || dst.length() != appImageFile(ctx).length()) {
+                appImageFile(ctx).copyTo(dst, overwrite = true)
+                dst.setExecutable(true, false)
+                dst.setReadable(true, false)
+                Log.i(TAG, "staged AppImage at ${dst.absolutePath}")
+            }
+        }
+
         activate(ctx)
         onProgress(100, "Ready")
         Log.i(TAG, "Vortex client installed at ${bin.absolutePath}")
