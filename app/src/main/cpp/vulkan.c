@@ -1224,7 +1224,39 @@ static VkResult shim_vkCreateSwapchainKHR(
     retire_swapchain_images();
     destroy_render_images();
 
-    g_swapchain_format = pCreateInfo->imageFormat;
+    /* The client may request a format with no direct AHB representation
+     * (wgpu/Bevy picks A8B8G8R8_UNORM_PACK32 = 43 here). Shim swapchain
+     * images are AHB imports, so allocate AHBs in a representable format
+     * and let the blit/swizzle path translate. The images handed to the
+     * client (render images) keep the requested format. */
+    VkFormat requested_format = pCreateInfo->imageFormat;
+    VkFormat effective_format = requested_format;
+    int format_rewritten = 0;
+    switch (requested_format) {
+        case VK_FORMAT_R8G8B8A8_UNORM:
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_B8G8R8A8_UNORM:
+        case VK_FORMAT_B8G8R8A8_SRGB:
+            break; /* directly representable */
+        default: {
+            int srgb = (requested_format == VK_FORMAT_A8B8G8R8_SRGB_PACK32 ||
+                        requested_format == VK_FORMAT_B8G8R8A8_SRGB);
+            effective_format = srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
+            format_rewritten = 1;
+            LOGI("swapchain format %d not AHB-representable, AHB uses %d",
+                 requested_format, effective_format);
+            break;
+        }
+    }
+    VkSwapchainCreateInfoKHR patched;
+    if (format_rewritten) {
+        patched = *pCreateInfo;
+        patched.imageFormat = effective_format;
+        pCreateInfo = &patched;
+    }
+
+    /* the client-facing format stays what was requested */
+    g_swapchain_format = requested_format;
     g_swapchain_width = pCreateInfo->imageExtent.width;
     g_swapchain_height = pCreateInfo->imageExtent.height;
     g_present_mode = pCreateInfo->presentMode;
@@ -1552,8 +1584,9 @@ static VkResult shim_vkCreateSwapchainKHR(
 
 finish:
     g_swapchain_image_count = count;
-    g_swizzle_views = ((g_swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || g_swapchain_format == VK_FORMAT_B8G8R8A8_SRGB)
-                    && (g_ahb_vk_format == VK_FORMAT_R8G8B8A8_UNORM || g_ahb_vk_format == VK_FORMAT_R8G8B8A8_SRGB));
+    g_swizzle_views = format_rewritten ||
+        (((g_swapchain_format == VK_FORMAT_B8G8R8A8_UNORM || g_swapchain_format == VK_FORMAT_B8G8R8A8_SRGB)
+                    && (g_ahb_vk_format == VK_FORMAT_R8G8B8A8_UNORM || g_ahb_vk_format == VK_FORMAT_R8G8B8A8_SRGB)));
     LOGI("swizzle check: swapchain_fmt=%d ahb_fmt=%d -> swizzle_views=%d", g_swapchain_format, g_ahb_vk_format, g_swizzle_views);
 
     if (g_swizzle_views && g_swapchain_has_dmabuf) {
