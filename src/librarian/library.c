@@ -443,7 +443,7 @@ static void initDummyLib(library_t *lib)
 }
 
 static const char* essential_libs[] = {
-    "libc.so.6", "libpthread.so.0", "librt.so.1", "libGL.so.1", "libGL.so", "libX11.so.6", 
+    "libc.so.6", "libpthread.so.0", "librt.so.1", "libGL.so.1", "libGL.so", 
     "libasound.so.2", "libdl.so.2", "libm.so.6", "libbsd.so.0", "libutil.so.1", "libresolv.so.2", "libresolv.so", 
     "libXxf86vm.so.1", "libXinerama.so.1", "libXrandr.so.2", "libXext.so.6", "libXfixes.so.3", "libXcursor.so.1",
     "libXrender.so.1", "libXft.so.2", "libXi.so.6", "libXss.so.1", "libXpm.so.4", "libXau.so.6", "libXdmcp.so.6",
