@@ -2047,9 +2047,13 @@ static int g_pipeline_workaround = -1;
 
 static int pipeline_workaround_active(void) {
     if (g_pipeline_workaround < 0) {
-        g_pipeline_workaround = (g_using_system_driver && strstr(g_gpu_name, "PowerVR")) ? 1 : 0;
+        /* PowerVR needs it; Adreno's wgpu workloads also return success
+         * with NULL pipeline handles when the client passes a cache-less
+         * create under box64, so serialize + bypass cache for all system
+         * drivers. */
+        g_pipeline_workaround = g_using_system_driver ? 1 : 0;
         if (g_pipeline_workaround)
-            LOGI("PowerVR: serializing pipeline creation, bypassing app pipeline cache");
+            LOGI("pipeline workaround: serializing creation, bypassing app pipeline cache");
     }
     return g_pipeline_workaround;
 }
