@@ -13,6 +13,7 @@
 #define AUDIO_SOCK      "polydroid_audio"
 #define AUDIO_MAGIC     0x31414450u
 #define PA_SAMPLE_S16LE 3
+#define PA_SAMPLE_FLOAT32LE 5
 
 typedef unsigned long snd_pcm_uframes_t;
 typedef long snd_pcm_sframes_t;
@@ -241,7 +242,9 @@ int snd_pcm_hw_params(snd_pcm_t *p, snd_pcm_hw_params_t *h) {
         memcpy(hdr + 0, &magic, 4);
         memcpy(hdr + 4, &rate, 4);
         hdr[8] = (uint8_t)(p->channels > 0 ? p->channels : 2);
-        hdr[9] = PA_SAMPLE_S16LE; // S16_LE host endian
+        /* report the actual negotiated format so the bridge decodes
+         * correctly (PA_SAMPLE_S16LE=3, PA_SAMPLE_FLOAT32LE=5) */
+        hdr[9] = (p->sample_bytes == 4) ? PA_SAMPLE_FLOAT32LE : PA_SAMPLE_S16LE;
         hdr[10] = 0; hdr[11] = 0;
         if (write_all(p->fd, hdr, sizeof(hdr)) == 0) {
             p->started = 1;
