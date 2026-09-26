@@ -348,13 +348,30 @@ int snd_pcm_start(snd_pcm_t *p) { (void)p; return 0; }
 int snd_pcm_nonblock(snd_pcm_t *p, int n) { if (p) p->nonblock = n; return 0; }
 int snd_pcm_wait(snd_pcm_t *p, int ms) { (void)p; (void)ms; return 1; }
 
+/* expose one virtual PCM device so cpal's enumeration finds us */
+static char s_hint_name[] = "default";
+static char s_hint_desc[] = "PolyDroid Audio";
+
 int snd_device_name_hint(int card, const char *iface, void ***hints) {
-    (void)card; (void)iface;
-    static void *empty[1] = { NULL };
-    if (hints) *hints = empty;
+    (void)card;
+    if (!hints) return 0;
+    static void *one_hint[2];
+    if (iface && strcmp(iface, "pcm") == 0) {
+        one_hint[0] = (void *)s_hint_name; /* opaque marker, passed back */
+        one_hint[1] = NULL;
+        *hints = one_hint;
+    } else {
+        *hints = NULL;
+    }
     return 0;
 }
-char *snd_device_name_get_hint(const void *hint, const char *id) { (void)hint; (void)id; return NULL; }
+char *snd_device_name_get_hint(const void *hint, const char *id) {
+    /* per alsa-lib semantics the returned string is owned by the hint */
+    if (!hint || !id) return NULL;
+    if (strcmp(id, "NAME") == 0) return s_hint_name;
+    if (strcmp(id, "DESC") == 0) return s_hint_desc;
+    return NULL; /* IOID: NULL = usable for output */
+}
 int snd_device_name_free_hint(void **hints) { (void)hints; return 0; }
 
 const char *snd_strerror(int e) { (void)e; return "polydroid alsa"; }
