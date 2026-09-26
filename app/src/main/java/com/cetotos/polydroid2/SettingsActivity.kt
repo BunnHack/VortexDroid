@@ -314,7 +314,9 @@ class SettingsActivity : AppCompatActivity() {
 
         fun getVulkanDriver(ctx: Context): String {
             val prefs = ctx.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            return prefs.getString(KEY_VULKAN_DRIVER, VULKAN_DRIVER_SYSTEM) ?: VULKAN_DRIVER_SYSTEM
+            // default auto: Adreno system drivers (esp. 2023-era 1.1.128)
+            // crash compiling some wgpu/Bevy pipelines; prefer Turnip there
+            return prefs.getString(KEY_VULKAN_DRIVER, VULKAN_DRIVER_AUTO) ?: VULKAN_DRIVER_AUTO
         }
 
         fun getMaxFps(ctx: Context): Int {
