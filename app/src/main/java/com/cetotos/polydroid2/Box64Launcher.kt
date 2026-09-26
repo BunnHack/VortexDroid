@@ -283,6 +283,10 @@ object Box64Launcher {
                 put("APPDIR", appDir.absolutePath)
                 put("ARGV0", target.absolutePath)
                 put("OWD", "$rootPath/home/user")
+                // The bootstrap re-execs the AppImage runtime, which needs
+                // FUSE on Android (unavailable). APPIMAGE_EXTRACT_AND_RUN
+                // makes the runtime self-extract to TMPDIR instead.
+                put("APPIMAGE_EXTRACT_AND_RUN", "1")
             }
             put("XDG_DATA_HOME", "$rootPath/home/user/.local/share")
             put("XDG_CONFIG_HOME", "$rootPath/home/user/.config")
