@@ -460,7 +460,7 @@ class GameActivity : AppCompatActivity() {
         ).apply { bottomMargin = dp(16) })
 
         val sendBtn = MaterialButton(this).apply {
-            text = "Send logs"
+            text = "Save logs"
         }
         content.addView(sendBtn, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
@@ -490,7 +490,7 @@ class GameActivity : AppCompatActivity() {
                     runOnUiThread {
                         Toast.makeText(this, m, Toast.LENGTH_SHORT).show()
                         sendBtn.isEnabled = true
-                        sendBtn.text = "Send logs"
+                        sendBtn.text = "Save logs"
                     }
                 }
             )

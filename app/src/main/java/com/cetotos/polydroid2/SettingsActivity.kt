@@ -956,8 +956,8 @@ class SettingsActivity : AppCompatActivity() {
 
         lateinit var logsRow: ActionRow
         logsRow = actionRow(
-            "Send app logs",
-            "Sends your recent app and client logs to the developer to help fix bugs. No personal info is included.",
+            "Save app logs",
+            "Collects your recent app and client logs into a text file in the Download folder. No personal info is included.",
             R.drawable.ic_send
         ) { sendLogs(logsRow) }
         diag.addView(logsRow.view, layoutParams().apply { topMargin = dp(8) })

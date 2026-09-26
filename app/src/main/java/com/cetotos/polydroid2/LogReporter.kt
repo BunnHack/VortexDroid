@@ -1,35 +1,28 @@
 package com.cetotos.polydroid2
 
 import android.app.ActivityManager
+import android.content.ContentValues
 import android.content.Context
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.MultipartBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.util.concurrent.TimeUnit
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+/**
+ * Collects app/client logs and saves them as a single text file into the
+ * device's public Download folder (/storage/emulated/0/Download/) via
+ * MediaStore — no storage permission needed on API 29+.
+ */
 object LogReporter {
     private const val TAG = "PolyDroid2"
-    private const val KEY_LAST_SEND = "last_log_send_time"
-    private const val COOLDOWN_MS = 180 * 1000L
     private const val GAME_LOG_TAIL = 5000
     private const val LOGCAT_TAIL = 1500
-
-    private const val REPORT_KEY = "very-secure-key-ok-dont-spam-it-bots-thanks"
-    private const val REPORT_BLOB = "HhEGCV5JSkwRGxZOBBcdAwwEQEsOHh0CBBUDBUIGH15NXkBKG0ZeWFhfQEBXS04fQFNaTF1IHxIdH3cJKU5QWysmeBwRUV5rKzNnCCVAPWkAAysUDh4lVEUuQBpSMAIlBhhZHxZyLV5+CFovA1lHHgwCXwc3YDsaPw=="
-
-    private val http by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .build()
-    }
 
     enum class Client(val label: String, val logName: String) {
         VORTEX("Vortex", "vortex.log");
@@ -43,12 +36,10 @@ object LogReporter {
         onProgress: (String) -> Unit,
         onDone: (success: Boolean, msg: String) -> Unit,
     ) {
-        val clients = Client.entries.toList()
-        var selected = clients.indexOf(defaultClient(ctx)).coerceAtLeast(0)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle("Send logs")
-            .setSingleChoiceItems(clients.map { it.label }.toTypedArray(), selected) { _, which -> selected = which }
-            .setPositiveButton("Send") { _, _ -> send(ctx, clients[selected], note, onProgress, onDone) }
+            .setTitle("Save logs")
+            .setMessage("Collects app, client, box64 session and logcat logs into a single text file in your Download folder.")
+            .setPositiveButton("Save") { _, _ -> send(ctx, Client.VORTEX, note, onProgress, onDone) }
             .setNegativeButton("Cancel", null)
             .show()
     }
@@ -60,46 +51,65 @@ object LogReporter {
         onProgress: (String) -> Unit,
         onDone: (success: Boolean, msg: String) -> Unit,
     ) {
-        val prefs = ctx.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        val now = System.currentTimeMillis()
-        val since = now - prefs.getLong(KEY_LAST_SEND, 0)
-        if (since < COOLDOWN_MS) {
-            onDone(false, "Please wait ${((COOLDOWN_MS - since) / 1000)}s before sending again")
-            return
-        }
-
         Thread {
             try {
                 onProgress("Reading logs…")
-                Thread.sleep(500)
-                val plain = "text/plain".toMediaTypeOrNull()
-                val report = buildReport(ctx, client, note).toByteArray(Charsets.UTF_8)
-                val gameLog = readGameLog(ctx, client).toByteArray(Charsets.UTF_8)
-                val logcat = readLogcat().toByteArray(Charsets.UTF_8)
-                val sessionLog = readSessionLog(ctx).toByteArray(Charsets.UTF_8)
+                val report = buildString {
+                    appendLine("==== VortexDroid log bundle ====")
+                    appendLine("Saved: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+                    appendLine()
+                    appendLine("===== report =====")
+                    appendLine(buildReport(ctx, client, note))
+                    appendLine()
+                    appendLine("===== ${client.logName} (tail $GAME_LOG_TAIL lines) =====")
+                    appendLine(readGameLog(ctx, client))
+                    appendLine()
+                    appendLine("===== session.log (box64, tail $GAME_LOG_TAIL lines) =====")
+                    appendLine(readSessionLog(ctx))
+                    appendLine()
+                    appendLine("===== logcat (tail $LOGCAT_TAIL lines) =====")
+                    appendLine(readLogcat())
+                }.toByteArray(Charsets.UTF_8)
 
-                onProgress("Sending…")
-                val body = MultipartBody.Builder().setType(MultipartBody.FORM)
-                    .addFormDataPart("content", summary(ctx, client, note))
-                    .addFormDataPart("files[0]", "report.txt", report.toRequestBody(plain))
-                    .addFormDataPart("files[1]", client.logName, gameLog.toRequestBody(plain))
-                    .addFormDataPart("files[2]", "logcat.log", logcat.toRequestBody(plain))
-                    .addFormDataPart("files[3]", "session.log", sessionLog.toRequestBody(plain))
-                    .build()
-                val req = Request.Builder().url(endpoint()).post(body).build()
-                http.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        prefs.edit().putLong(KEY_LAST_SEND, System.currentTimeMillis()).apply()
-                        onDone(true, "Logs sent!")
-                    } else {
-                        onDone(false, "Failed to send! HTTP ${resp.code}")
-                    }
+                onProgress("Saving…")
+                val name = "vortexdroid-log-${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}.txt"
+                val uri = saveToDownloads(ctx, name, report)
+                if (uri != null) {
+                    Log.i(TAG, "log bundle saved to Download/$name ($uri)")
+                    onDone(true, "Saved to Download/$name")
+                } else {
+                    onDone(false, "Failed to write to Download folder")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "failed to send logs: ${e.message}", e)
+                Log.e(TAG, "failed to save logs: ${e.message}", e)
                 onDone(false, "Failed with: ${e.message}")
             }
         }.start()
+    }
+
+    /** API 29+: MediaStore.Downloads needs no permission for own contributions. */
+    private fun saveToDownloads(ctx: Context, name: String, bytes: ByteArray): Uri? {
+        return try {
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, name)
+                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val resolver = ctx.contentResolver
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+            resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: run {
+                resolver.delete(uri, null, null)
+                return null
+            }
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            uri
+        } catch (e: Exception) {
+            Log.e(TAG, "saveToDownloads failed: ${e.message}", e)
+            null
+        }
     }
 
     private fun buildReport(ctx: Context, client: Client, note: String): String {
@@ -123,13 +133,6 @@ object LogReporter {
             appendLine("Safe mode: ${SettingsActivity.isSafeMode(ctx)}")
             if (note.isNotBlank()) appendLine("Note: $note")
         }
-    }
-
-    private fun summary(ctx: Context, client: Client, note: String): String {
-        val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-        val base = "${client.label} | ${pi.versionName} | ${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE}"
-        val full = if (note.isNotBlank()) "$base | $note" else base
-        return if (full.length > 1900) full.take(1900) else full
     }
 
     private fun readGameLog(ctx: Context, client: Client): String {
@@ -182,13 +185,5 @@ object LogReporter {
         } catch (e: Exception) {
             "Failed to read logcat: ${e.message}"
         }
-    }
-
-    private fun endpoint(): String {
-        val raw = android.util.Base64.decode(REPORT_BLOB, android.util.Base64.DEFAULT)
-        val k = REPORT_KEY.toByteArray()
-        val out = ByteArray(raw.size)
-        for (i in raw.indices) out[i] = (raw[i].toInt() xor k[i % k.size].toInt()).toByte()
-        return String(out, Charsets.UTF_8)
     }
 }
