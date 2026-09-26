@@ -426,12 +426,41 @@ static void* find_DebugUtilsMessengerCallback_Fct(void* fct)
 
 #undef SUPER
 
-//#define PRE_INIT if(libGL) {lib->w.lib = dlopen(libGL, RTLD_LAZY | RTLD_GLOBAL); lib->path = box_strdup(libGL);} else
 #define ALTNAME "libvulkan_surface_shim.so"
 
 #define PRE_INIT \
     if(BOX64ENV(novulkan)) \
-        return -1;
+        return -1; \
+    /* ALTNAME dlopen in wrappedlib_init.h relies on LD_LIBRARY_PATH, which a\
+     * re-exec'd child may have scrubbed. Preload the shim via an absolute\
+     * path derived from this library's own location (libbox64.so and the\
+     * shim ship in the same native lib dir), or POLYDROID_NATIVE_DIR. */ \
+    { \
+        static int shim_preloaded = 0; \
+        if (!shim_preloaded) { \
+            shim_preloaded = 1; \
+            const char* paths[2] = {0, 0}; \
+            Dl_info info; \
+            if (dladdr((void*)&fillVulkanProcWrapper, &info) && info.dli_fname) { \
+                static char dir[512]; \
+                snprintf(dir, sizeof(dir), "%s", info.dli_fname); \
+                char* slash = strrchr(dir, '/'); \
+                if (slash) { \
+                    slash[1] = '\0'; \
+                    paths[0] = dir; \
+                } \
+            } \
+            const char* pndir = getenv("POLYDROID_NATIVE_DIR"); \
+            if (pndir) paths[1] = pndir; \
+            for (int i = 0; i < 2; i++) { \
+                if (!paths[i]) continue; \
+                char shim_path[768]; \
+                snprintf(shim_path, sizeof(shim_path), "%s%slibvulkan_surface_shim.so", \
+                         paths[i], (paths[i][strlen(paths[i])-1] == '/') ? "" : "/"); \
+                if (dlopen(shim_path, RTLD_LAZY | RTLD_GLOBAL)) break; \
+            } \
+        } \
+    }
 
 #define CUSTOM_INIT \
     lib->w.priv = dlsym(lib->w.lib, "vkGetInstanceProcAddr"); \
