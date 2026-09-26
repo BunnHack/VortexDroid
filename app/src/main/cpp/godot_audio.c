@@ -103,6 +103,9 @@ int snd_pcm_hw_params_set_period_size_near(snd_pcm_t *p, snd_pcm_hw_params_t *h,
 int snd_pcm_hw_params_set_periods_near(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int *val, int *dir) { (void)p; (void)h; (void)val; (void)dir; return 0; }
 void snd_pcm_hw_params_free(snd_pcm_hw_params_t *h) { (void)h; }
 
+/* symbols referenced by cpal via GLOB_DAT (must exist, even as stubs) */
+snd_pcm_hw_params_t *snd_pcm_hw_params_malloc(void) { return calloc(1, 1024); }
+
 /* ---- cpal ALSA-hostile surface: satisfy link-time relocations ---- */
 
 int snd_pcm_hw_params_get_channels(const snd_pcm_hw_params_t *h, unsigned int *ch) { (void)h; if (ch) *ch = 2; return 0; }
@@ -246,6 +249,8 @@ int snd_pcm_sw_params_set_start_threshold(snd_pcm_t *p, snd_pcm_sw_params_t *s, 
 int snd_pcm_sw_params(snd_pcm_t *p, snd_pcm_sw_params_t *s) { (void)p; (void)s; return 0; }
 int snd_pcm_sw_params_malloc(snd_pcm_sw_params_t **s) { if (!s) return -1; *s = calloc(1, 512); return *s ? 0 : -1; }
 void snd_pcm_sw_params_free(snd_pcm_sw_params_t *s) { free(s); }
+int snd_pcm_sw_params_set_tstamp_mode(snd_pcm_t *p, snd_pcm_sw_params_t *s, unsigned int m) { (void)p; (void)s; (void)m; return 0; }
+int snd_pcm_sw_params_set_tstamp_type(snd_pcm_t *p, snd_pcm_sw_params_t *s, unsigned int t) { (void)p; (void)s; (void)t; return 0; }
 void snd_pcm_sw_params_get_avail_min(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 512; }
 void snd_pcm_sw_params_get_start_threshold(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 1; }
 

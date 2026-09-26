@@ -102,6 +102,8 @@ object VortexClient {
             it.setReadable(true, false)
         }
 
+        neutralizePthreadIntercept(bin)
+
         activate(ctx)
         onProgress(100, "Ready")
         Log.i(TAG, "Vortex client installed at ${bin.absolutePath}")
@@ -154,6 +156,86 @@ object VortexClient {
             val tail = synchronized(output) { output.toString().takeLast(2000) }
             throw java.io.IOException("AppImage extraction exited with ${proc.exitValue()}: $tail")
         }
+    }
+
+    /**
+     * The client bundles a crash-handler that exports its own `pthread_create`
+     * (an interceptor that swaps thread entry points to install a 16KB
+     * alternate signal stack per thread). The ELF dynamic symbol of the main
+     * binary takes precedence over libc's, so under box64 every thread spawn
+     * funnels through the interceptor, which corrupts the emulated stack
+     * layout and SIGSEGVs inside the wrapper prologue.
+     *
+     * Rename the symbol in-place inside .dynstr (same length, NUL-padded) so
+     * the interceptor never engages: client code calls the libc/box64
+     * `pthread_create` (my_pthread_create bridge) directly. The crash
+     * handler's dlsym-based self-detection then finds nothing to hook and
+     * cleanly falls back to the plain function.
+     */
+    private fun neutralizePthreadIntercept(bin: File) {
+        val TARGET = "pthread_create"
+        val REPLACE = "xthread_create"
+        try {
+            java.io.RandomAccessFile(bin, "rw").use { raf ->
+                val header = ByteArray(64)
+                raf.readFully(header)
+                if (header[0] != 0x7f.toByte() || header[1] != 'E'.code.toByte()) return
+                val e_shoff = le64(header, 40)
+                val e_shentsize = le16(header, 58).toInt()
+                val e_shnum = le16(header, 60).toInt()
+                raf.seek(e_shoff)
+                val shdrs = ByteArray(e_shentsize * e_shnum)
+                raf.readFully(shdrs)
+
+                var renamed = 0
+                for (i in 0 until e_shnum) {
+                    val off = i * e_shentsize
+                    val shType = le32(shdrs, off + 4).toInt()
+                    // SHT_STRTAB = 3 (covers .dynstr and .strtab)
+                    if (shType != 3) continue
+                    val shOffset = le64(shdrs, off + 24)
+                    val shSize = le64(shdrs, off + 32).toInt()
+                    raf.seek(shOffset)
+                    val strtab = ByteArray(shSize)
+                    raf.readFully(strtab)
+                    var idx = 0
+                    while (idx < shSize) {
+                        var end = idx
+                        while (end < shSize && strtab[end] != 0.toByte()) end++
+                        if (end - idx == TARGET.length &&
+                            String(strtab, idx, TARGET.length, Charsets.US_ASCII) == TARGET) {
+                            // rename first char; keep length identical
+                            System.arraycopy(
+                                REPLACE.toByteArray(Charsets.US_ASCII), 0,
+                                strtab, idx, REPLACE.length
+                            )
+                            raf.seek(shOffset + idx)
+                            raf.write(strtab, idx, end - idx)
+                            renamed++
+                        }
+                        idx = end + 1
+                    }
+                }
+                Log.i(TAG, "pthread interceptor neutralized ($renamed symbol tables patched)")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "pthread neutralize failed (continuing anyway): ${e.message}")
+        }
+    }
+
+    private fun le16(b: ByteArray, o: Int) =
+        ((b[o].toInt() and 0xff) or ((b[o + 1].toInt() and 0xff) shl 8)).toLong()
+
+    private fun le32(b: ByteArray, o: Int): Long {
+        var v = 0L
+        for (i in 3 downTo 0) v = (v shl 8) or (b[o + i].toLong() and 0xff)
+        return v
+    }
+
+    private fun le64(b: ByteArray, o: Int): Long {
+        var v = 0L
+        for (i in 7 downTo 0) v = (v shl 8) or (b[o + i].toLong() and 0xff)
+        return v
     }
 
     /** Points rootfs/vortex at the extracted client so the guest can find it. */
