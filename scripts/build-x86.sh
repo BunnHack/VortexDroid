@@ -27,6 +27,7 @@ build connect_redirect.c       "$GLIBC_OUT/libconnect_redirect.so"
 build dns_resolver.c           "$X86_OUT/libdns_resolver.so"
 build x11_xcb_stub.c           "$X86_OUT/libX11-xcb.so.1"        libX11-xcb.so.1
 build glibc_compat.c           "$X86_OUT/libglibc_compat.so"
+build mprotect_fix.c           "$X86_OUT/libmprotect_fix.so"
 build unity_crash_fix.c        "$X86_OUT/libunity_crash_fix.so"
 build godot_audio.c            "$X86_OUT/libasound.so.2"           libasound.so.2
 build ctype_fix.c              "$X86_OUT/libctype_fix.so"
