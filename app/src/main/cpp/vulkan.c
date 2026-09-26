@@ -2066,11 +2066,23 @@ static VkResult shim_vkCreateGraphicsPipelines(
     const VkAllocationCallbacks* pAllocator,
     VkPipeline* pPipelines)
 {
+    LOGI("vkCreateGraphicsPipelines: n=%u cache=%p infos=%p out=%p",
+         createInfoCount, (void*)pipelineCache, (void*)pCreateInfos, (void*)pPipelines);
     if (!pipeline_workaround_active())
         return real_createGraphicsPipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
     pthread_mutex_lock(&g_pipeline_mutex);
     VkResult r = real_createGraphicsPipelines(device, VK_NULL_HANDLE, createInfoCount, pCreateInfos, pAllocator, pPipelines);
     pthread_mutex_unlock(&g_pipeline_mutex);
+    if (r == VK_SUCCESS && pPipelines) {
+        for (uint32_t i = 0; i < createInfoCount; i++) {
+            if (!pPipelines[i]) {
+                /* driver "succeeded" with a NULL handle - the client would
+                 * crash dereferencing it; surface a real error instead */
+                LOGE("vkCreateGraphicsPipelines: NULL pipeline[%u] despite VK_SUCCESS", i);
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+        }
+    }
     return r;
 }
 
@@ -2082,11 +2094,21 @@ static VkResult shim_vkCreateComputePipelines(
     const VkAllocationCallbacks* pAllocator,
     VkPipeline* pPipelines)
 {
+    LOGI("vkCreateComputePipelines: n=%u cache=%p infos=%p out=%p",
+         createInfoCount, (void*)pipelineCache, (void*)pCreateInfos, (void*)pPipelines);
     if (!pipeline_workaround_active())
         return real_createComputePipelines(device, pipelineCache, createInfoCount, pCreateInfos, pAllocator, pPipelines);
     pthread_mutex_lock(&g_pipeline_mutex);
     VkResult r = real_createComputePipelines(device, VK_NULL_HANDLE, createInfoCount, pCreateInfos, pAllocator, pPipelines);
     pthread_mutex_unlock(&g_pipeline_mutex);
+    if (r == VK_SUCCESS && pPipelines) {
+        for (uint32_t i = 0; i < createInfoCount; i++) {
+            if (!pPipelines[i]) {
+                LOGE("vkCreateComputePipelines: NULL pipeline[%u] despite VK_SUCCESS", i);
+                return VK_ERROR_INITIALIZATION_FAILED;
+            }
+        }
+    }
     return r;
 }
 
