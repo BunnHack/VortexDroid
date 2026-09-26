@@ -62,70 +62,70 @@ GO(XCloseIM, iFp)
 //GO(_XCloseLC, 
 GO(XCloseOM, iFp)
 //GO(_XcmsAddCmapRec, 
-GOM(XcmsAddColorSpace, iFEp)
+GO(XcmsAddColorSpace, iFp)
 GO(XcmsAddFunctionSet, iFp)
 GO(XcmsAllocColor, iFpLpL)
 GO(XcmsAllocNamedColor, iFpLpppL)
 //GO(_XcmsArcTangent, 
-GOM(XcmsCCCOfColormap, pFEpL)
-GOM(XcmsCIELabClipab, iFEppuup)
-GOM(XcmsCIELabClipL, iFEppuup)
-GOM(XcmsCIELabClipLab, iFEppuup)
+GO(XcmsCCCOfColormap, pFpL)
+GO(XcmsCIELabClipab, iFppuup)
+GO(XcmsCIELabClipL, iFppuup)
+GO(XcmsCIELabClipLab, iFppuup)
 DATA(XcmsCIELabColorSpace, 6*sizeof(void*))
 //DATA(_XcmsCIELab_prefix, 
-GOM(XcmsCIELabQueryMaxC, iFEpddp)
-GOM(XcmsCIELabQueryMaxL, iFEpddp)
-GOM(XcmsCIELabQueryMaxLC, iFEpdp)
+GO(XcmsCIELabQueryMaxC, iFpddp)
+GO(XcmsCIELabQueryMaxL, iFpddp)
+GO(XcmsCIELabQueryMaxLC, iFpdp)
 //GO(_XcmsCIELabQueryMaxLCRGB, 
-GOM(XcmsCIELabQueryMinL, iFEpddp)
-GOM(XcmsCIELabToCIEXYZ, iFEpppu)
-GOM(XcmsCIELabWhiteShiftColors, iFEpppLpup)
-GOM(XcmsCIELuvClipL, iFEppuup)
-GOM(XcmsCIELuvClipLuv, iFEppuup)
-GOM(XcmsCIELuvClipuv, iFEppuup)
+GO(XcmsCIELabQueryMinL, iFpddp)
+GO(XcmsCIELabToCIEXYZ, iFpppu)
+GO(XcmsCIELabWhiteShiftColors, iFpppLpup)
+GO(XcmsCIELuvClipL, iFppuup)
+GO(XcmsCIELuvClipLuv, iFppuup)
+GO(XcmsCIELuvClipuv, iFppuup)
 DATA(XcmsCIELuvColorSpace, 6*sizeof(void*))
 //DATA(_XcmsCIELuv_prefix, 
-GOM(XcmsCIELuvQueryMaxC, iFEpddp)
-GOM(XcmsCIELuvQueryMaxL, iFEpddp)
-GOM(XcmsCIELuvQueryMaxLC, iFEpdp)
+GO(XcmsCIELuvQueryMaxC, iFpddp)
+GO(XcmsCIELuvQueryMaxL, iFpddp)
+GO(XcmsCIELuvQueryMaxLC, iFpdp)
 //GO(_XcmsCIELuvQueryMaxLCRGB, 
-GOM(XcmsCIELuvQueryMinL, iFEpddp)
-GOM(XcmsCIELuvToCIEuvY, iFEpppu)
-GOM(XcmsCIELuvWhiteShiftColors, iFEpppLpup)
+GO(XcmsCIELuvQueryMinL, iFpddp)
+GO(XcmsCIELuvToCIEuvY, iFpppu)
+GO(XcmsCIELuvWhiteShiftColors, iFpppLpup)
 DATA(XcmsCIEuvYColorSpace, 6*sizeof(void*))
 //DATA(_XcmsCIEuvY_prefix, 
-GOM(XcmsCIEuvYToCIELuv, iFEpppu)
-GOM(XcmsCIEuvYToCIEXYZ, iFEpppu)
-GOM(XcmsCIEuvYToTekHVC, iFEpppu)
+GO(XcmsCIEuvYToCIELuv, iFpppu)
+GO(XcmsCIEuvYToCIEXYZ, iFpppu)
+GO(XcmsCIEuvYToTekHVC, iFpppu)
 //GO(_XcmsCIEuvY_ValidSpec, 
 DATA(XcmsCIExyYColorSpace, 6*sizeof(void*)) // probably need some wrapping
 //DATA(_XcmsCIExyY_prefix, 
-GOM(XcmsCIExyYToCIEXYZ, iFEpppu)
+GO(XcmsCIExyYToCIEXYZ, iFpppu)
 DATA(XcmsCIEXYZColorSpace, 6*sizeof(void*))
 //DATA(_XcmsCIEXYZ_prefix, 
-GOM(XcmsCIEXYZToCIELab, iFEpppu)
-GOM(XcmsCIEXYZToCIEuvY, iFEpppu)
-GOM(XcmsCIEXYZToCIExyY, iFEpppu)
-GOM(XcmsCIEXYZToRGBi, iFEppup)
+GO(XcmsCIEXYZToCIELab, iFpppu)
+GO(XcmsCIEXYZToCIEuvY, iFpppu)
+GO(XcmsCIEXYZToCIExyY, iFpppu)
+GO(XcmsCIEXYZToRGBi, iFppup)
 //GO(_XcmsCIEXYZ_ValidSpec, 
-GOM(XcmsClientWhitePointOfCCC, pFEp)
-GOM(XcmsConvertColors, iFEppuLp)
+GO(XcmsClientWhitePointOfCCC, pFp)
+GO(XcmsConvertColors, iFppuLp)
 //GO(_XcmsConvertColorsWithWhitePt, 
 //GO(_XcmsCopyCmapRecAndFree, 
 //GO(_XcmsCopyISOLatin1Lowered, 
 //GO(_XcmsCopyPointerArray, 
 //GO(_XcmsCosine, 
-GOM(XcmsCreateCCC, pFEpipppppp)
+GO(XcmsCreateCCC, pFpipppppp)
 //GO(_XcmsCubeRoot, 
 DATA(_XcmsDDColorSpaces, 6*sizeof(void*))
 DATA(_XcmsDDColorSpacesInit, 6*sizeof(void*))
 //GO(_XcmsDDConvertColors, 
-GOM(XcmsDefaultCCC, pFEpi)
+GO(XcmsDefaultCCC, pFpi)
 //GO(_XcmsDeleteCmapRec, 
 DATA(_XcmsDIColorSpaces, 6*sizeof(void*))
 DATA(_XcmsDIColorSpacesInit, 6*sizeof(void*))
 //GO(_XcmsDIConvertColors, 
-GOM(XcmsDisplayOfCCC, pFEp)
+GO(XcmsDisplayOfCCC, pFp)
 //GO(_XcmsEqualWhitePts, 
 GO(XcmsFormatOfPrefix, LFp)
 GOM(XcmsFreeCCC, vFp)
@@ -141,13 +141,13 @@ GO(XcmsLookupColor, iFpLpppL)
 //GO(_XcmsLRGB_InitScrnDefault, 
 GO(XcmsPrefixOfFormat, pFL)
 //GO(_XcmsPushPointerArray, 
-GOM(XcmsQueryBlack, iFEpLp)
-GOM(XcmsQueryBlue, iFEpLp)
+GO(XcmsQueryBlack, iFpLp)
+GO(XcmsQueryBlue, iFpLp)
 GO(XcmsQueryColor, iFpLpL)
 GO(XcmsQueryColors, iFpLpuL)
-GOM(XcmsQueryGreen, iFEpLp)
-GOM(XcmsQueryRed, iFEpLp)
-GOM(XcmsQueryWhite, iFEpLp)
+GO(XcmsQueryGreen, iFpLp)
+GO(XcmsQueryRed, iFpLp)
+GO(XcmsQueryWhite, iFpLp)
 DATA(_XcmsRegColorSpaces, 6*sizeof(void*))
 //GO(_XcmsRegFormatOfPrefix, 
 //GO(_XcmsResolveColor, 
@@ -155,42 +155,42 @@ DATA(_XcmsRegColorSpaces, 6*sizeof(void*))
 DATA(XcmsRGBColorSpace, 6*sizeof(void*))
 DATA(XcmsRGBiColorSpace, 6*sizeof(void*))
 //DATA(_XcmsRGBi_prefix, 
-GOM(XcmsRGBiToCIEXYZ, iFEppup)
-GOM(XcmsRGBiToRGB, iFEppup)
+GO(XcmsRGBiToCIEXYZ, iFppup)
+GO(XcmsRGBiToRGB, iFppup)
 //DATA(_XcmsRGB_prefix, 
-GOM(XcmsRGBToRGBi, iFEppup)
+GO(XcmsRGBToRGBi, iFppup)
 //GO(_XcmsRGB_to_XColor, 
 DATA(_XcmsSCCFuncSets, 3*sizeof(void*))
 DATA(_XcmsSCCFuncSetsInit, 3*sizeof(void*))
-GOM(XcmsScreenNumberOfCCC, iFEp)
-GOM(XcmsScreenWhitePointOfCCC, pFEp)
-GOM(XcmsSetCCCOfColormap, pFEpLp)
-GOM(XcmsSetCompressionProc, pFEppp)
+GO(XcmsScreenNumberOfCCC, iFp)
+GO(XcmsScreenWhitePointOfCCC, pFp)
+GO(XcmsSetCCCOfColormap, pFpLp)
+GO(XcmsSetCompressionProc, pFppp)
 //GO(_XcmsSetGetColor, 
 //GO(_XcmsSetGetColors, 
-GOM(XcmsSetWhiteAdjustProc, pFEppp)
-GOM(XcmsSetWhitePoint, iFEpp)
+GO(XcmsSetWhiteAdjustProc, pFppp)
+GO(XcmsSetWhitePoint, iFpp)
 //GO(_XcmsSine, 
 //GO(_XcmsSquareRoot, 
 GO(XcmsStoreColor, iFpLp)
 GO(XcmsStoreColors, iFpLpup)
 //GO(_XcmsTekHVC_CheckModify, 
-GOM(XcmsTekHVCClipC, iFEppuup)
-GOM(XcmsTekHVCClipV, iFEppuup)
-GOM(XcmsTekHVCClipVC, iFEppuup)
+GO(XcmsTekHVCClipC, iFppuup)
+GO(XcmsTekHVCClipV, iFppuup)
+GO(XcmsTekHVCClipVC, iFppuup)
 DATA(XcmsTekHVCColorSpace, 6*sizeof(void*))
 //DATA(_XcmsTekHVC_prefix, 
-GOM(XcmsTekHVCQueryMaxC, iFEpddp)
-GOM(XcmsTekHVCQueryMaxV, iFEpddp)
-GOM(XcmsTekHVCQueryMaxVC, iFEpdp)
+GO(XcmsTekHVCQueryMaxC, iFpddp)
+GO(XcmsTekHVCQueryMaxV, iFpddp)
+GO(XcmsTekHVCQueryMaxVC, iFpdp)
 //GO(_XcmsTekHVCQueryMaxVCRGB, 
-GOM(XcmsTekHVCQueryMaxVSamples, iFEpdpu)
-GOM(XcmsTekHVCQueryMinV, iFEpddp)
-GOM(XcmsTekHVCToCIEuvY, iFEpppu)
-GOM(XcmsTekHVCWhiteShiftColors, iFEpppLpup)
+GO(XcmsTekHVCQueryMaxVSamples, iFpdpu)
+GO(XcmsTekHVCQueryMinV, iFpddp)
+GO(XcmsTekHVCToCIEuvY, iFpppu)
+GO(XcmsTekHVCWhiteShiftColors, iFpppLpup)
 DATA(XcmsUNDEFINEDColorSpace, 6*sizeof(void*))
 //GO(_XcmsUnresolveColor, 
-GOM(XcmsVisualOfCCC, pFEp)
+GO(XcmsVisualOfCCC, pFp)
 //GO(_XColor_to_XcmsRGB, 
 GO(XConfigureWindow, iFpLup)
 GO(XConnectionNumber, iFp)
