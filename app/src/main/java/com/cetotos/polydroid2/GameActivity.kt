@@ -260,6 +260,24 @@ class GameActivity : AppCompatActivity() {
             kbButton.y = imeLayout.yFrac * frame.height - kbSize / 2f
         }
 
+        // floating log button -> live log viewer (session.log + vortex.log tail)
+        val logButton = android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.ic_logs)
+            setColorFilter(0xFFFFFFFF.toInt())
+            setBackgroundColor(0x99000000.toInt())
+            setPadding(kbPad, kbPad, kbPad, kbPad)
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            isClickable = true
+            isFocusable = false
+            setOnClickListener { showLiveLogDialog() }
+        }
+        val logParams = FrameLayout.LayoutParams(kbSize, kbSize)
+        frame.addView(logButton, logParams)
+        frame.post {
+            logButton.x = frame.width - kbSize - (16 * density)
+            logButton.y = (16 * density)
+        }
+
         setContentView(frame)
 
         onBackPressedDispatcher.addCallback(this, object : androidx.activity.OnBackPressedCallback(true) {
@@ -701,5 +719,68 @@ class GameActivity : AppCompatActivity() {
         init {
             System.loadLibrary("native_window_jni")
         }
+    }
+
+    private fun showLiveLogDialog() {
+        val density = resources.displayMetrics.density
+        val textView = android.widget.TextView(this).apply {
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            setTextColor(0xFFE0E0E0.toInt())
+            setPadding(
+                (12 * density).toInt(), (8 * density).toInt(),
+                (12 * density).toInt(), (8 * density).toInt()
+            )
+            text = readLiveLog()
+        }
+        val scroll = android.widget.ScrollView(this).apply {
+            setBackgroundColor(0xEE1E1E1E.toInt())
+            addView(textView)
+        }
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Live logs")
+            .setView(scroll)
+            .setPositiveButton("Export") { _, _ ->
+                LogReporter.send(this, LogReporter.defaultClient(this), "",
+                    onProgress = { },
+                    onDone = { ok, msg -> runOnUiThread {
+                        android.widget.Toast.makeText(this,
+                            if (ok) "Saved: $msg" else "Export failed: $msg",
+                            android.widget.Toast.LENGTH_LONG).show()
+                    } })
+            }
+            .setNeutralButton("Refresh") { _, _ -> }
+            .setNegativeButton("Close", null)
+            .show()
+        // neutral handled manually: refresh in place
+        dialog.getButton(android.content.DialogInterface.BUTTON_NEUTRAL)?.setOnClickListener {
+            textView.text = readLiveLog()
+            scroll.fullScroll(android.view.View.FOCUS_DOWN)
+        }
+        scroll.post { scroll.fullScroll(android.view.View.FOCUS_DOWN) }
+    }
+
+    private fun readLiveLog(): String {
+        val sb = StringBuilder()
+        fun tail(f: File, label: String, max: Int) {
+            if (!f.exists()) return
+            sb.append("===== $label (${f.name}) =====\n")
+            try {
+                val lines = f.readLines()
+                val start = (lines.size - max).coerceAtLeast(0)
+                for (i in start until lines.size) sb.append(lines[i]).append('\n')
+            } catch (e: Exception) {
+                sb.append("(read failed: ${e.message})\n")
+            }
+            sb.append('\n')
+        }
+        // session log first (most verbose), then the client's own log
+        tail(File(filesDir, "session.log"), "box64 session", 300)
+        val vortexLogs = File(RootFs.rootDir(this), "home/user/.vortex/logs")
+        vortexLogs.listFiles()?.filter { it.isFile }?.maxByOrNull { it.lastModified() }?.let {
+            tail(it, "client", 300)
+        }
+        if (sb.isEmpty()) sb.append("(no logs yet)")
+        return sb.toString()
     }
 }
