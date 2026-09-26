@@ -128,7 +128,7 @@ DATA(_XcmsDIColorSpacesInit, 6*sizeof(void*))
 GO(XcmsDisplayOfCCC, pFp)
 //GO(_XcmsEqualWhitePts, 
 GO(XcmsFormatOfPrefix, LFp)
-GOM(XcmsFreeCCC, vFp)
+GO(XcmsFreeCCC, vFp)
 //GO(_XcmsFreeIntensityMaps, 
 //GO(_XcmsFreePointerArray, 
 //GO(_XcmsGetElement, 
