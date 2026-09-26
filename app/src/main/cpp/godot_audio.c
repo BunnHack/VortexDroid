@@ -30,6 +30,7 @@ struct snd_pcm {
     int fd;
     unsigned int rate;
     int channels;
+    int sample_bytes; /* derived from the requested ALSA format */
     int started;
     uint8_t carry[16];
     int carry_len;
@@ -95,7 +96,18 @@ size_t snd_pcm_hw_params_sizeof(void) { return 1024; }
 size_t snd_pcm_sw_params_sizeof(void) { return 1024; }
 int snd_pcm_hw_params_any(snd_pcm_t *p, snd_pcm_hw_params_t *h) { (void)p; (void)h; return 0; }
 int snd_pcm_hw_params_set_access(snd_pcm_t *p, snd_pcm_hw_params_t *h, int a) { (void)p; (void)h; (void)a; return 0; }
-int snd_pcm_hw_params_set_format(snd_pcm_t *p, snd_pcm_hw_params_t *h, int f) { (void)p; (void)h; (void)f; return 0; }
+static int alsa_format_bytes(int f) {
+    switch (f) {
+        case 2: case 10: /* S16_LE / S16_BE */ return 2;
+        default: /* f32, s32, everything else */ return 4;
+    }
+}
+
+int snd_pcm_hw_params_set_format(snd_pcm_t *p, snd_pcm_hw_params_t *h, int f) {
+    (void)h;
+    if (p) p->sample_bytes = alsa_format_bytes(f);
+    return 0;
+}
 int snd_pcm_hw_params_set_channels(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int ch) { (void)h; if (p) p->channels = (int)ch; return 0; }
 int snd_pcm_hw_params_set_rate_near(snd_pcm_t *p, snd_pcm_hw_params_t *h, unsigned int *val, int *dir) { (void)h; (void)dir; if (p && val) p->rate = *val; return 0; }
 int snd_pcm_hw_params_set_buffer_size_near(snd_pcm_t *p, snd_pcm_hw_params_t *h, snd_pcm_uframes_t *val) { (void)p; (void)h; (void)val; return 0; }
@@ -188,8 +200,8 @@ snd_pcm_sframes_t snd_pcm_mmap_commit(snd_pcm_t *p, snd_pcm_uframes_t o, snd_pcm
 int snd_pcm_mmap(snd_pcm_t *p, int i, void **a) { (void)p; (void)i; if (a) *a = NULL; return 0; }
 int snd_pcm_munmap(snd_pcm_t *p, int i) { (void)p; (void)i; return 0; }
 int snd_pcm_set_params(snd_pcm_t *p, int f, int a, unsigned int ch, unsigned int r, int s, snd_pcm_uframes_t l) {
-    (void)f; (void)a; (void)s; (void)l;
-    if (p) { p->channels = (int)ch; p->rate = r; }
+    (void)a; (void)s; (void)l;
+    if (p) { p->channels = (int)ch; p->rate = r; p->sample_bytes = alsa_format_bytes(f); }
     return 0;
 }
 int snd_pcm_get_params(snd_pcm_t *p, snd_pcm_uframes_t *buf, snd_pcm_uframes_t *per) {
@@ -256,39 +268,70 @@ int snd_pcm_sw_params_set_tstamp_type(snd_pcm_t *p, snd_pcm_sw_params_t *s, unsi
 void snd_pcm_sw_params_get_avail_min(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 512; }
 void snd_pcm_sw_params_get_start_threshold(const snd_pcm_sw_params_t *s, snd_pcm_uframes_t *v) { (void)s; if (v) *v = 1; }
 
+/* wait until the bridge socket can accept more data (blocking semantics) */
+static int wait_writable(snd_pcm_t *p) {
+    struct pollfd pfd;
+    pfd.fd = p->fd;
+    pfd.events = POLLOUT;
+    for (;;) {
+        int r = poll(&pfd, 1, 2000);
+        if (r > 0) return 0;
+        if (r == 0) return -1; /* 2s timeout */
+        if (errno != EINTR) return -1;
+    }
+}
+
 snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *p, const void *buf, snd_pcm_uframes_t frames) {
     if (!p) return -1;
     if (p->fd < 0 || !buf || !frames)
         return (snd_pcm_sframes_t)frames;
-    int fsz = (p->channels > 0 ? p->channels : 2) * 2; /* S16 */
+    int ch = (p->channels > 0 ? p->channels : 2);
+    int bps = (p->sample_bytes > 0 ? p->sample_bytes : 2);
+    int fsz = ch * bps;
     if (fsz > (int)sizeof(p->carry)) fsz = sizeof(p->carry);
-    if (p->carry_len) {
+
+    /* flush any partial frame carried over first */
+    while (p->carry_len) {
         ssize_t w = send(p->fd, p->carry + p->carry_off, p->carry_len, MSG_NOSIGNAL);
         if (w < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) return -EAGAIN;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (p->nonblock) return -EAGAIN;
+                if (wait_writable(p) != 0) { close(p->fd); p->fd = -1; return (snd_pcm_sframes_t)frames; }
+                continue;
+            }
             close(p->fd); p->fd = -1;
             return (snd_pcm_sframes_t)frames;
         }
         p->carry_off += (int)w;
         p->carry_len -= (int)w;
-        if (p->carry_len) return -EAGAIN;
-        p->carry_off = 0;
+        if (!p->carry_len) p->carry_off = 0;
     }
-    ssize_t s = send(p->fd, buf, (size_t)frames * (size_t)fsz, MSG_NOSIGNAL);
-    if (s < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) return -EAGAIN;
-        close(p->fd); p->fd = -1;
-        return (snd_pcm_sframes_t)frames;
+
+    size_t want = (size_t)frames * (size_t)fsz;
+    size_t done = 0;
+    while (done < want) {
+        ssize_t s = send(p->fd, (const char *)buf + done, want - done, MSG_NOSIGNAL);
+        if (s < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (p->nonblock) break;
+                if (wait_writable(p) != 0) { close(p->fd); p->fd = -1; return (snd_pcm_sframes_t)frames; }
+                continue;
+            }
+            close(p->fd); p->fd = -1;
+            return (snd_pcm_sframes_t)frames;
+        }
+        done += (size_t)s;
     }
-    size_t full = (size_t)s / (size_t)fsz;
-    size_t rem = (size_t)s % (size_t)fsz;
+    size_t full = done / (size_t)fsz;
+    size_t rem = done % (size_t)fsz;
     if (rem) {
         p->carry_len = fsz - (int)rem;
         p->carry_off = 0;
         memcpy(p->carry, (const char *)buf + full * fsz + rem, (size_t)p->carry_len);
         full += 1;
     }
-    if (!full) return -EAGAIN;
+    if (!full && p->nonblock) return -EAGAIN;
+    if (full > frames) full = frames; /* never report more frames than asked */
     return (snd_pcm_sframes_t)full;
 }
 
