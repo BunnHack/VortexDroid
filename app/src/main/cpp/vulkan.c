@@ -2281,19 +2281,22 @@ static PFN_vkVoidFunction shim_vkGetDeviceProcAddr(VkDevice device, const char* 
     }
     if (!real_vkGetDeviceProcAddr)
         return NULL;
+    /* NOTE: `device` here is the shim-visible handle; entry points must be
+     * resolved against the real VkDevice captured at creation time. */
+    VkDevice real_dev = g_device ? g_device : device;
     if (strcmp(pName, "vkCreateGraphicsPipelines") == 0) {
         real_createGraphicsPipelines = (PFN_vkCreateGraphicsPipelines_t)
-            real_vkGetDeviceProcAddr(device, pName);
+            real_vkGetDeviceProcAddr(real_dev, pName);
         return real_createGraphicsPipelines
             ? (PFN_vkVoidFunction)shim_vkCreateGraphicsPipelines : NULL;
     }
     if (strcmp(pName, "vkCreateComputePipelines") == 0) {
         real_createComputePipelines = (PFN_vkCreateComputePipelines_t)
-            real_vkGetDeviceProcAddr(device, pName);
+            real_vkGetDeviceProcAddr(real_dev, pName);
         return real_createComputePipelines
             ? (PFN_vkVoidFunction)shim_vkCreateComputePipelines : NULL;
     }
-    return real_vkGetDeviceProcAddr(device, pName);
+    return real_vkGetDeviceProcAddr(real_dev, pName);
 }
 
 PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char* pName) {
