@@ -30,6 +30,7 @@ build glibc_compat.c           "$X86_OUT/libglibc_compat.so"
 build mprotect_fix.c           "$X86_OUT/libmprotect_fix.so"
 build unity_crash_fix.c        "$X86_OUT/libunity_crash_fix.so"
 build godot_audio.c            "$X86_OUT/libasound.so.2"           libasound.so.2
+cp -f "$X86_OUT/libasound.so.2" "$ASSETS/libasound.so.2.0.0" || true
 build ctype_fix.c              "$X86_OUT/libctype_fix.so"
 build godot_ctype_fix.c        "$X86_OUT/libgodot_ctype_patch.so"
 build pthread_recursive_fix.c  "$X86_OUT/libpthread_recursive_fix.so"
