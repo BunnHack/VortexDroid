@@ -444,9 +444,24 @@ static VkResult shim_vkCreateInstance(
     LOGI("Creating Vulkan instance with %u extensions", newCount);
     VkResult result = real_vkCreateInstance(&modifiedInfo, pAllocator, pInstance);
     if (result == VK_ERROR_EXTENSION_NOT_PRESENT && newCount > baseCount) {
-        LOGI("vkCreateInstance rejected injected exts! retrying without them");
-        modifiedInfo.enabledExtensionCount = baseCount;
+        /* some drivers (HAL-based Turnip builds) enumerate android_surface
+         * differently; retry dropping only the injected android_surface
+         * first - the shim surface path does not actually require the
+         * instance extension to be enabled for our handle-based flow. */
+        LOGI("vkCreateInstance rejected injected exts! retrying without android_surface only");
+        uint32_t retryCount = 0;
+        for (uint32_t i = 0; i < newCount; i++)
+            if (strcmp(newExts[i], "VK_KHR_android_surface") != 0)
+                newExts[retryCount++] = newExts[i];
+        modifiedInfo.ppEnabledExtensionNames = newExts;
+        modifiedInfo.enabledExtensionCount = retryCount;
         result = real_vkCreateInstance(&modifiedInfo, pAllocator, pInstance);
+        if (result == VK_ERROR_EXTENSION_NOT_PRESENT) {
+            LOGI("still rejected; retrying with base set only");
+            modifiedInfo.ppEnabledExtensionNames = newExts;
+            modifiedInfo.enabledExtensionCount = baseCount;
+            result = real_vkCreateInstance(&modifiedInfo, pAllocator, pInstance);
+        }
     }
     free(newExts);
 
