@@ -74,14 +74,23 @@ object Box64Launcher {
         // sigisemptyset...) that bionic doesn't provide, and our ALSA shim
         // bridges audio to the Android AudioBridge instead.
         run {
-            val imgLibs = File(rootPath, "vortex/usr/lib")
+            // overlay BOTH lib locations the client resolves through:
+            // rootfs/vortex/usr/lib AND the AppImage's own usr/lib next to
+            // the binary (which wins rpath for the parent process)
             val x86LibDir = File("$rootPath/usr/lib/x86_64-linux-gnu")
-            try {
-                File(imgLibs, "libudev.so.1").copyTo(File(imgLibs, "libudev.real.so.1"), overwrite = true)
-                File(x86LibDir, "libudev.so.1").copyTo(File(imgLibs, "libudev.so.1"), overwrite = true)
-                File(x86LibDir, "libasound.so.2").copyTo(File(imgLibs, "libasound.so.2"), overwrite = true)
-            } catch (e: Exception) {
-                Log.w(TAG, "client lib overlay failed: ${e.message}")
+            for (imgLibDir in listOf(
+                File(rootPath, "vortex/usr/lib"),
+                File(rootPath, "vortex/usr/bin/../lib"),
+            )) {
+                try {
+                    if (!imgLibDir.isDirectory) continue
+                    val udev = File(imgLibDir, "libudev.so.1")
+                    if (udev.isFile) udev.copyTo(File(imgLibDir, "libudev.real.so.1"), overwrite = true)
+                    File(x86LibDir, "libudev.so.1").copyTo(File(imgLibDir, "libudev.so.1"), overwrite = true)
+                    File(x86LibDir, "libasound.so.2").copyTo(File(imgLibDir, "libasound.so.2"), overwrite = true)
+                } catch (e: Exception) {
+                    Log.w(TAG, "client lib overlay (${imgLibDir.path}) failed: ${e.message}")
+                }
             }
         }
         File("$rootPath/tmp").mkdirs()

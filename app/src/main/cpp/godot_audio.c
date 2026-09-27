@@ -285,6 +285,11 @@ static int wait_writable(snd_pcm_t *p) {
 }
 
 snd_pcm_sframes_t snd_pcm_writei(snd_pcm_t *p, const void *buf, snd_pcm_uframes_t frames) {
+    static int dbg = -1;
+    if (dbg < 0) dbg = getenv("POLYDROID_AUDIO_DEBUG") ? 1 : 0;
+    if (dbg && p)
+        fprintf(stderr, "polydroid-audio: writei frames=%lu ch=%d bps=%d fd=%d\n",
+                (unsigned long)frames, p->channels, p->sample_bytes, p->fd);
     if (!p) return -1;
     if (p->fd < 0 || !buf || !frames)
         return (snd_pcm_sframes_t)frames;
