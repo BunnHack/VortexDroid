@@ -11,7 +11,7 @@
         android:id="@+id/btn_website"
         android:layout_width="240dp"
         android:layout_height="60dp"
-        android:text="Vortex"
+        android:text="Play"
         app:icon="@drawable/ic_launcher_foreground"
         app:iconGravity="textStart"
         app:iconSize="25dp" />

@@ -39,7 +39,12 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         findViewById<android.view.View>(R.id.btn_website).setOnClickListener {
-            vortexWebsite()
+            if (VortexApi.isLoggedIn(this)) {
+                // in-app launcher (fresh ticket per launch)
+                startActivity(Intent(this, LoginActivity::class.java))
+            } else {
+                vortexWebsite()
+            }
         }
 
         findViewById<android.view.View>(R.id.btn_settings).setOnClickListener {
